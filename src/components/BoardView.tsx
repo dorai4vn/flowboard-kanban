@@ -12,6 +12,7 @@ import {
   type DragEndEvent,
   type DragOverEvent,
   type DragStartEvent,
+  type KeyboardCoordinateGetter,
 } from '@dnd-kit/core';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 import { toFullIndex, visibleColumn, type TaskFilter } from '../domain/filters';
@@ -31,6 +32,23 @@ type Props = {
 
 type DropData = { type: 'task' | 'column'; column: ColumnId };
 
+/**
+ * Arrow Left/Right jump to the neighbouring column (dnd-kit's default only reorders reliably
+ * inside one list); Up/Down keep the default sortable behaviour.
+ */
+const columnKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
+  if (event.code !== 'ArrowLeft' && event.code !== 'ArrowRight') return sortableKeyboardCoordinates(event, args);
+  const { active, over, droppableRects } = args.context;
+  const current = (over?.data.current as DropData | undefined)?.column ?? (active?.data.current as DropData | undefined)?.column;
+  if (!current) return undefined;
+  const step = event.code === 'ArrowRight' ? 1 : -1;
+  const next = COLUMN_IDS[COLUMN_IDS.indexOf(current) + step];
+  const rect = next ? droppableRects.get(`column:${next}`) : undefined;
+  if (!rect) return undefined;
+  event.preventDefault();
+  return { x: rect.left + 12, y: rect.top + 48 };
+};
+
 export function BoardView({ board, filter, today, onAdd, onOpen }: Props) {
   const moveTask = useBoardStore((s) => s.moveTask);
   const [tab, setTab] = useState<ColumnId>('todo');
@@ -42,7 +60,7 @@ export function BoardView({ board, filter, today, onAdd, onOpen }: Props) {
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
     useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
+      coordinateGetter: columnKeyboardCoordinates,
       keyboardCodes: { start: ['Space'], cancel: ['Escape'], end: ['Space', 'Enter'] },
     }),
   );
