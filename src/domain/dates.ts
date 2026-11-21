@@ -1,0 +1,26 @@
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/** `YYYY-MM-DD` for the given instant in the browser's local time zone. */
+export function toLocalDateKey(d: Date): string {
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function parseKey(key: string): [number, number, number] {
+  const [y, m, d] = key.split('-').map(Number);
+  return [y ?? 1970, m ?? 1, d ?? 1];
+}
+
+export function addDays(key: string, n: number): string {
+  const [y, m, d] = parseKey(key);
+  return toLocalDateKey(new Date(y, m - 1, d + n));
+}
+
+/** Date keys are zero-padded, so lexical order is calendar order. */
+export function compareDateKeys(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+export function formatDueDate(key: string): string {
+  const [, m, d] = parseKey(key);
+  return `${pad(d)}/${pad(m)}`;
+}
