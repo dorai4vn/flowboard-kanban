@@ -58,7 +58,7 @@ describe('board layout', () => {
 
   it('shows the storage notice and dismisses it', async () => {
     const { user } = renderApp({ 'flowboard:state': '{bad' });
-    expect(screen.getByRole('status')).toHaveTextContent('Dữ liệu cũ bị lỗi, đã sao lưu và tạo bảng mới.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Dữ liệu cũ bị lỗi, đã sao lưu và tạo bảng mới.');
     await user.click(screen.getByRole('button', { name: 'Đóng thông báo' }));
     expect(screen.queryByText(/Dữ liệu cũ bị lỗi/)).not.toBeInTheDocument();
   });

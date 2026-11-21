@@ -1,18 +1,15 @@
-import { Calendar, AlignLeft } from 'lucide-react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { AlignLeft, Calendar } from 'lucide-react';
 import { formatDueDate } from '../domain/dates';
 import { isDueToday, isOverdue } from '../domain/filters';
 import { PRIORITY_LABELS, type ColumnId, type Label, type Task } from '../domain/types';
+import { MoveMenu } from './MoveMenu';
 import { LABEL_CLASSES, PRIORITY_BAR, PRIORITY_CLASSES } from './styles';
 
-type Props = {
-  task: Task;
-  column: ColumnId;
-  labels: Label[];
-  today: string;
-  onOpen: (id: string) => void;
-};
+type BodyProps = { task: Task; column: ColumnId; labels: Label[]; today: string };
 
-export function TaskCardBody({ task, column, labels, today }: Omit<Props, 'onOpen'>) {
+export function TaskCardBody({ task, column, labels, today }: BodyProps) {
   const overdue = isOverdue(task, column, today);
   const dueToday = column !== 'done' && isDueToday(task, today);
   const done = column === 'done';
@@ -34,7 +31,7 @@ export function TaskCardBody({ task, column, labels, today }: Omit<Props, 'onOpe
   return (
     <>
       <span className={`absolute inset-y-3 left-0 w-[3px] rounded-r-full ${PRIORITY_BAR[task.priority]}`} aria-hidden="true" />
-      <p className={`text-sm font-medium leading-snug ${done ? 'text-muted line-through decoration-faint' : 'text-fg'}`}>{task.title}</p>
+      <p className={`pr-6 text-sm font-medium leading-snug break-words ${done ? 'text-muted line-through decoration-faint' : 'text-fg'}`}>{task.title}</p>
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
         <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${PRIORITY_CLASSES[task.priority]}`}>{PRIORITY_LABELS[task.priority]}</span>
         {taskLabels.map((l) => (
@@ -54,22 +51,39 @@ export function TaskCardBody({ task, column, labels, today }: Omit<Props, 'onOpe
   );
 }
 
-export function TaskCard(props: Props) {
-  const { task, onOpen } = props;
+type Props = BodyProps & { onOpen: (id: string) => void; onMove: (id: string, to: ColumnId) => void };
+
+export const cardClass = 'relative rounded-xl border border-line bg-card p-3 pl-4 shadow-sm shadow-black/20';
+
+export function TaskCard({ task, column, labels, today, onOpen, onMove }: Props) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: task.id,
+    data: { type: 'task', column },
+    attributes: { roleDescription: 'công việc có thể kéo thả' },
+  });
+
   return (
-    <article
-      className="group relative cursor-pointer rounded-xl border border-line bg-card p-3 pl-4 shadow-sm shadow-black/20 transition hover:-translate-y-px hover:border-line-strong hover:bg-card-hover"
-      tabIndex={0}
-      aria-label={task.title}
-      onClick={() => onOpen(task.id)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          onOpen(task.id);
-        }
-      }}
-    >
-      <TaskCardBody {...props} />
-    </article>
+    <div className="group relative" style={{ transform: CSS.Translate.toString(transform), transition }}>
+      <article
+        ref={setNodeRef}
+        {...attributes}
+        {...listeners}
+        aria-label={task.title}
+        data-task-id={task.id}
+        onClick={() => onOpen(task.id)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !isDragging) {
+            e.preventDefault();
+            onOpen(task.id);
+            return;
+          }
+          listeners?.onKeyDown?.(e);
+        }}
+        className={`${cardClass} cursor-grab touch-manipulation select-none transition-[background,border,opacity] hover:border-line-strong hover:bg-card-hover active:cursor-grabbing ${isDragging ? 'opacity-30' : ''}`}
+      >
+        <TaskCardBody task={task} column={column} labels={labels} today={today} />
+      </article>
+      <MoveMenu taskTitle={task.title} column={column} onMove={(to) => onMove(task.id, to)} />
+    </div>
   );
 }
