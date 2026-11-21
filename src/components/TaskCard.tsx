@@ -68,7 +68,6 @@ export function TaskCard({ task, column, labels, today, onOpen, onMove }: Props)
         ref={setNodeRef}
         {...attributes}
         {...listeners}
-        aria-label={task.title}
         data-task-id={task.id}
         onClick={() => onOpen(task.id)}
         onKeyDown={(e) => {

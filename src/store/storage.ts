@@ -22,12 +22,15 @@ export function loadState(storage: Storage | null, now: Date): { state: AppState
     parsed = null;
   }
   if (!parsed) {
+    const fresh = createSeedState(now);
     try {
       storage.setItem(`flowboard:backup-${now.getTime()}`, raw);
+      // Persist the fresh state right away so the next load does not back up and warn again.
+      saveState(storage, fresh);
     } catch {
-      // Backup is best effort; we still must not crash.
+      // Backup is best effort; keep the corrupted data in place and still open the app.
     }
-    return { state: createSeedState(now), notice: CORRUPT_NOTICE };
+    return { state: fresh, notice: CORRUPT_NOTICE };
   }
   if (!parsed.boards[parsed.activeBoardId]) parsed = { ...parsed, activeBoardId: parsed.boardOrder[0]! };
   return { state: parsed, notice: null };

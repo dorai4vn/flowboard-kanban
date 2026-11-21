@@ -63,7 +63,7 @@ test('search without diacritics, filter by priority, clear', async ({ page }) =>
 });
 
 test('today mode focuses on due, overdue and done-today tasks', async ({ page }) => {
-  await page.getByRole('button', { name: 'Hôm nay' }).click();
+  await page.getByRole('button', { name: 'Hôm nay', exact: true }).click();
   await expect(page.getByText('Hôm nay: 2 việc cần làm · 1 quá hạn · 1 đã xong')).toBeVisible();
   await expect(card(page, 'Mua quà sinh nhật')).toHaveCount(0);
   await expect(card(page, 'Hoàn thành bài tập buổi 8')).toBeVisible();
@@ -79,13 +79,13 @@ test('new board with its own accent color persists', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Tùy chỉnh bảng' }).click();
   await page.getByRole('radio', { name: 'Màu Hồng' }).click();
-  await expect(page.locator('[data-accent]')).toHaveAttribute('data-accent', 'rose');
+  await expect(page.locator('html')).toHaveAttribute('data-accent', 'rose');
 
   await page.reload();
-  await expect(page.locator('[data-accent]')).toHaveAttribute('data-accent', 'rose');
+  await expect(page.locator('html')).toHaveAttribute('data-accent', 'rose');
   await expect(page.getByRole('combobox', { name: 'Chọn bảng' }).locator('option:checked')).toHaveText('Đồ án');
   await page.getByRole('combobox', { name: 'Chọn bảng' }).selectOption({ label: 'Bảng của tôi' });
-  await expect(page.locator('[data-accent]')).toHaveAttribute('data-accent', 'indigo');
+  await expect(page.locator('html')).toHaveAttribute('data-accent', 'indigo');
 });
 
 test('delete a task with confirmation; stays deleted after reload', async ({ page }) => {

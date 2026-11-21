@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toLocalDateKey } from './domain/dates';
 import { TaskDialog, type EditorState } from './components/TaskDialog';
 import { BoardView } from './components/BoardView';
@@ -14,6 +14,11 @@ export default function App({ today = toLocalDateKey(new Date()) }: { today?: st
   const notice = useBoardStore((s) => s.notice);
   const dismissNotice = useBoardStore((s) => s.dismissNotice);
   const [editor, setEditor] = useState<EditorState | null>(null);
+
+  // Dialogs are portalled to <body>, so the accent also lives on <html>.
+  useEffect(() => {
+    document.documentElement.dataset.accent = board.accent;
+  }, [board.accent]);
 
   return (
     <div data-accent={board.accent} className="board-glow min-h-dvh">

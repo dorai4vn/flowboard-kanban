@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 type Props = {
@@ -8,6 +9,9 @@ type Props = {
   role?: 'dialog' | 'alertdialog';
   size?: 'sm' | 'md';
 };
+
+/** Open modals, innermost last: only the top one handles Escape and Tab. */
+const stack: symbol[] = [];
 
 const FOCUSABLE = 'input, select, textarea, button, [href], [tabindex]:not([tabindex="-1"])';
 
@@ -20,10 +24,13 @@ export function Modal({ title, onClose, children, role = 'dialog', size = 'md' }
   });
 
   useEffect(() => {
+    const me = Symbol('modal');
+    stack.push(me);
     const previous = document.activeElement as HTMLElement | null;
     const first = panel.current?.querySelector<HTMLElement>('[data-autofocus]') ?? panel.current?.querySelector<HTMLElement>(FOCUSABLE);
     first?.focus();
     const onKey = (e: KeyboardEvent) => {
+      if (stack[stack.length - 1] !== me) return;
       if (e.key === 'Escape') {
         e.stopPropagation();
         onCloseRef.current();
@@ -44,11 +51,13 @@ export function Modal({ title, onClose, children, role = 'dialog', size = 'md' }
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      previous?.focus?.();
+      stack.splice(stack.indexOf(me), 1);
+      if (previous?.isConnected) previous.focus();
     };
   }, []);
 
-  return (
+  // Portal to <body>: an ancestor with backdrop-filter (the header) would otherwise trap `position: fixed`.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div
@@ -68,6 +77,7 @@ export function Modal({ title, onClose, children, role = 'dialog', size = 'md' }
         </div>
         {children}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

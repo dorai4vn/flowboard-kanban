@@ -71,3 +71,14 @@ describe('saveState', () => {
     expect(() => saveState(full, state)).not.toThrow();
   });
 });
+
+describe('corrupted data recovery is one-off', () => {
+  it('saves the fresh state so a second load neither warns nor backs up again', () => {
+    const storage = createMemoryStorage({ [STORAGE_KEY]: '{bad json' });
+    expect(loadState(storage, now).notice).toBe(CORRUPT_NOTICE);
+    const later = new Date(now.getTime() + 1000);
+    expect(loadState(storage, later).notice).toBeNull();
+    const backups = Array.from({ length: storage.length }, (_, i) => storage.key(i)).filter((k) => k?.startsWith('flowboard:backup-'));
+    expect(backups).toHaveLength(1);
+  });
+});
