@@ -1,1 +1,63 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-bg: #0b0d12;
+  --color-surface: #13161d;
+  --color-card: #1a1e27;
+  --color-card-hover: #20242f;
+  --color-line: rgb(255 255 255 / 0.06);
+  --color-line-strong: rgb(255 255 255 / 0.12);
+  --color-fg: #e6e8ee;
+  --color-muted: #9aa1b2;
+  --color-faint: #6b7385;
+}
+
+@theme inline {
+  --color-accent: var(--accent);
+  --color-accent-soft: color-mix(in oklab, var(--accent) 16%, transparent);
+  --color-accent-strong: color-mix(in oklab, var(--accent) 80%, white);
+}
+
+[data-accent] { --accent: #7c83ff; }
+[data-accent="violet"] { --accent: #a78bfa; }
+[data-accent="blue"] { --accent: #60a5fa; }
+[data-accent="emerald"] { --accent: #34d399; }
+[data-accent="amber"] { --accent: #fbbf24; }
+[data-accent="rose"] { --accent: #fb7185; }
+
+:root {
+  color-scheme: dark;
+  background: var(--color-bg);
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01";
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent, #7c83ff);
+  outline-offset: 2px;
+}
+
+.board-glow {
+  background:
+    radial-gradient(1200px 500px at 10% -10%, color-mix(in oklab, var(--accent) 14%, transparent), transparent 60%),
+    radial-gradient(900px 400px at 110% 0%, color-mix(in oklab, var(--accent) 8%, transparent), transparent 60%),
+    var(--color-bg);
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.8); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

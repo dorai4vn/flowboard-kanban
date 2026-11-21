@@ -1,10 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import App from './App';
+import { renderApp } from './test/renderApp';
 
 describe('App', () => {
   it('shows the FlowBoard heading', () => {
-    render(<App />);
-    expect(screen.getByRole('heading', { name: 'FlowBoard' })).toBeInTheDocument();
+    renderApp();
+    expect(screen.getByRole('heading', { level: 1, name: 'FlowBoard' })).toBeInTheDocument();
   });
 });
