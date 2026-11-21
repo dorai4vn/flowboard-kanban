@@ -49,7 +49,8 @@ export function FilterBar({ board }: { board: Board }) {
           ref={search}
           type="search"
           aria-label="Tìm kiếm công việc"
-          placeholder="Tìm công việc…  ( / )"
+          placeholder="Tìm công việc…"
+          title="Phím tắt: /"
           value={filter.query}
           onChange={(e) => setFilter({ query: e.target.value })}
           className="w-full rounded-lg border border-line-strong bg-surface py-1.5 pl-9 pr-3 text-sm text-fg placeholder:text-faint outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
