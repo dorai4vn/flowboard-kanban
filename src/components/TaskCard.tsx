@@ -59,7 +59,15 @@ export function TaskCard(props: Props) {
   return (
     <article
       className="group relative cursor-pointer rounded-xl border border-line bg-card p-3 pl-4 shadow-sm shadow-black/20 transition hover:-translate-y-px hover:border-line-strong hover:bg-card-hover"
+      tabIndex={0}
+      aria-label={task.title}
       onClick={() => onOpen(task.id)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          onOpen(task.id);
+        }
+      }}
     >
       <TaskCardBody {...props} />
     </article>
