@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { FakeRepository } from '../../src/data/fakeRepository.js';
 import { applyMutation } from '../../src/data/mutations.js';
 import { createSeedState } from '../../src/domain/seed.js';
-import type { ApprovalAction, ApprovalStore, ApprovalView, ClaimResult } from './approvals.js';
+import { ApprovalError, type ApprovalAction, type ApprovalStore, type ApprovalView, type ClaimResult } from './approvals.js';
+import { verifyRunState } from './runStateMac.js';
 import { handleApproval, handleChat, type HandlerDeps, type Session } from './handlers.js';
 import { call, lastToolResult, say, ScriptedModel, type Step } from './testing/scriptedModel.js';
 import { deleteTools, type AgentContext } from './tools.js';
@@ -17,6 +18,10 @@ const TODAY = '2026-11-21';
 class FakeApprovals implements ApprovalStore {
   rows = new Map<string, ApprovalView & { status: string; run_state: string; run_state_mac: string; claim?: string; owner: string }>();
   executes = 0;
+  /** Simulate a Postgres refusal at execution (e.g. the board changed after the card was shown). */
+  executeCode?: string;
+  /** Simulate a Postgres refusal at creation (e.g. 'too_large'). */
+  createError?: Error;
   constructor(
     private readonly owner: string,
     private readonly repo: FakeRepository,
@@ -26,6 +31,7 @@ class FakeApprovals implements ApprovalStore {
     return this.shared?.rows ?? this.rows;
   }
   async create(action: ApprovalAction, targetId: string, runState: string, mac: string): Promise<ApprovalView> {
+    if (this.createError) throw this.createError;
     const s = this.repo.state;
     const board = Object.values(s.boards).find((b) => (action === 'delete_task' ? b.tasks[targetId] : b.id === targetId));
     if (!board) throw new Error('target_not_found');
@@ -66,6 +72,10 @@ class FakeApprovals implements ApprovalStore {
     const r = this.table.get(id);
     if (!r || r.owner !== this.owner || r.status !== 'approved' || r.claim !== claim || r.action !== action || r.target_id !== targetId) {
       return { code: 'invalid_claim' };
+    }
+    if (this.executeCode) {
+      r.status = 'expired';
+      return { code: this.executeCode };
     }
     r.status = 'executed';
     this.executes++;
@@ -139,11 +149,23 @@ describe('chat endpoint: auth, validation, limits', () => {
     expect((await res.json()).error).toMatch(/quá nhiều yêu cầu/i);
   });
 
-  it('reports missing server configuration by variable name only', async () => {
+  it('reports missing server configuration without naming variables to anonymous callers', async () => {
     const w = world();
     const res = await handleChat(chat('Xin chào'), deps(w.session, new ScriptedModel([]), { config: { missing: ['OPENAI_API_KEY'] } }));
     expect(res.status).toBe(503);
-    expect(await res.json()).toEqual({ error: 'Trợ lý AI chưa được cấu hình trên máy chủ.', missing: ['OPENAI_API_KEY'] });
+    expect(await res.json()).toEqual({ error: 'Trợ lý AI chưa được cấu hình trên máy chủ.' });
+  });
+
+  it('refuses oversized bodies before parsing them', async () => {
+    const w = world();
+    const model = new ScriptedModel([]);
+    const big = new Request('http://local/api/agent/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer good-token-123456789012345' },
+      body: JSON.stringify({ message: 'x', history: [], today: TODAY, pad: 'x'.repeat(70_000) }),
+    });
+    expect((await handleChat(big, deps(w.session, model))).status).toBe(413);
+    expect(model.requests).toHaveLength(0);
   });
 });
 
@@ -345,5 +367,67 @@ describe('provider failures', () => {
     w.repo.failLoad = true;
     const res = await handleChat(chat('xin chào'), deps(w.session, new ScriptedModel([])));
     expect(res.status).toBe(503);
+  });
+});
+
+describe('review hardening', () => {
+  let w: ReturnType<typeof world>;
+  beforeEach(() => {
+    w = world();
+  });
+  const deleteBoardModel = (boardId: string) => new ScriptedModel([() => [call('delete_board', { board_id: boardId })], () => [say('Đã xóa bảng.')]]);
+  const approveBody = (a: ApprovalView, decision = 'approve') => post('/api/agent/approval', { approval_id: a.id, action: a.action, target_id: a.target_id, decision });
+
+  it('the reject endpoint is rate limited too', async () => {
+    const model = deleteBoardModel(w.boardId);
+    const { approval } = await (await handleChat(chat('xóa bảng'), deps(w.session, model))).json();
+    w.block();
+    expect((await handleApproval(approveBody(approval, 'reject'), deps(w.session, model))).status).toBe(429);
+    expect(w.approvals.rows.get(approval.id)!.status).toBe('pending');
+  });
+
+  it('a board that changed after the card was shown is not deleted and the user is told why', async () => {
+    const model = deleteBoardModel(w.boardId);
+    const { approval } = await (await handleChat(chat('xóa bảng'), deps(w.session, model))).json();
+    w.approvals.executeCode = 'target_changed';
+    const res = await handleApproval(approveBody(approval), deps(w.session, model));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/đã thay đổi/);
+    expect(w.repo.state.boards[w.boardId]).toBeDefined();
+  });
+
+  it('an oversized conversation cannot be stored for approval and the user gets a clear answer', async () => {
+    w.approvals.createError = new ApprovalError('too_large');
+    const res = await handleChat(chat('xóa bảng'), deps(w.session, deleteBoardModel(w.boardId)));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.approval).toBeNull();
+    expect(body.reply).toMatch(/quá dài/);
+  });
+
+  it('after approval the resumed run cannot delete a second target; it only gets a new pending approval', async () => {
+    const victim = idOf(w.repo, 'Mua quà sinh nhật');
+    const other = idOf(w.repo, 'Viết báo cáo tuần');
+    const model = new ScriptedModel([
+      () => [call('delete_task', { task_id: victim })],
+      () => [call('delete_task', { task_id: other })],
+      () => [say('xong')],
+    ]);
+    const { approval } = await (await handleChat(chat('xóa'), deps(w.session, model))).json();
+    const res = await handleApproval(approveBody(approval), deps(w.session, model));
+    const body = await res.json();
+    expect(body.status).toBe('executed');
+    expect(body.approval).toMatchObject({ action: 'delete_task', target_id: other });
+    expect(titles(w.repo)).toContain('Viết báo cáo tuần');
+    expect(w.approvals.executes).toBe(1);
+  });
+
+  it('the run state MAC is bound to the approved action and target', async () => {
+    const model = deleteBoardModel(w.boardId);
+    const { approval } = await (await handleChat(chat('xóa bảng'), deps(w.session, model))).json();
+    const row = w.approvals.rows.get(approval.id)!;
+    expect(verifyRunState('test-secret', 'user-a', 'delete_board', w.boardId, row.run_state, row.run_state_mac)).toBe(true);
+    expect(verifyRunState('test-secret', 'user-a', 'delete_task', w.boardId, row.run_state, row.run_state_mac)).toBe(false);
+    expect(verifyRunState('test-secret', 'user-b', 'delete_board', w.boardId, row.run_state, row.run_state_mac)).toBe(false);
   });
 });

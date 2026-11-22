@@ -84,7 +84,7 @@ select lives_ok($$ select public.agent_create_approval('delete_task', 'a0000000-
 select throws_ok($$ select public.agent_create_approval('delete_task', 'a0000000-0000-4000-8000-0000000000d2', 'S', 'M') $$, '53400', null, 'more than 10 pending approvals refused');
 
 -- ---------- request log (rate limit) ----------
-select lives_ok($$ insert into public.agent_requests default values $$, 'user logs own request');
+select is(public.agent_rate_limit_hit(), true, 'user logs own request through the capped function');
 select throws_ok($$ insert into public.agent_requests (user_id) values ('bbbbbbbb-0000-4000-8000-000000000002') $$, '42501', null, 'cannot log for someone else');
 select throws_ok($$ delete from public.agent_requests $$, '42501', null, 'cannot erase own request log');
 

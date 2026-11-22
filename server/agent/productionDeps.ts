@@ -1,6 +1,6 @@
 import { SupabaseRepository } from '../../src/data/supabaseRepository.js';
 import { SupabaseApprovalStore } from './approvals.js';
-import { LIMITS, readServerConfig } from './config.js';
+import { readServerConfig } from './config.js';
 import type { HandlerDeps } from './handlers.js';
 import { authenticate, withinRateLimit } from './supabaseServer.js';
 import { ruleBasedModel } from './testing/ruleBasedModel.js';
@@ -25,7 +25,7 @@ export function productionDeps(env: Record<string, string | undefined> = process
         userId: auth.userId,
         repo: new SupabaseRepository(auth.db),
         approvals: new SupabaseApprovalStore(auth.db),
-        checkRateLimit: () => withinRateLimit(auth.db, LIMITS.requestsPerWindow, LIMITS.windowMinutes),
+        checkRateLimit: () => withinRateLimit(auth.db),
       };
     },
   };

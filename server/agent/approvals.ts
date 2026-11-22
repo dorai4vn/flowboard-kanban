@@ -24,7 +24,7 @@ export interface ApprovalStore {
 }
 
 export class ApprovalError extends Error {
-  constructor(readonly reason: 'target_not_found' | 'too_many_pending' | 'failed') {
+  constructor(readonly reason: 'target_not_found' | 'too_many_pending' | 'too_large' | 'failed') {
     super(reason);
     this.name = 'ApprovalError';
   }
@@ -46,7 +46,7 @@ export class SupabaseApprovalStore implements ApprovalStore {
     });
     if (error) {
       const code = pgCode(error);
-      throw new ApprovalError(code === 'P0002' ? 'target_not_found' : code === '53400' ? 'too_many_pending' : 'failed');
+      throw new ApprovalError(code === 'P0002' ? 'target_not_found' : code === '53400' ? 'too_many_pending' : code === '54000' ? 'too_large' : 'failed');
     }
     return data as unknown as ApprovalView;
   }

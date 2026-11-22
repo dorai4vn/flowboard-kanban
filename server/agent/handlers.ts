@@ -59,6 +59,8 @@ const MSG = {
   expired: 'Yêu cầu xác nhận đã hết hạn. Hãy nhờ Trợ lý AI tạo lại.',
   mismatch: 'Thông tin xác nhận không khớp với yêu cầu ban đầu. Không có gì bị xóa.',
   notDeleted: 'Chưa xóa được. Vui lòng thử lại.',
+  targetChanged: 'Bảng đã thay đổi kể từ lúc bạn xem thẻ xác nhận (có công việc được thêm hoặc bớt). Chưa có gì bị xóa — hãy nhờ Trợ lý AI tạo yêu cầu mới.',
+  tooLarge: 'Yêu cầu quá lớn.',
 };
 
 const json = (status: number, body: unknown) =>
@@ -70,15 +72,39 @@ type Prepared = { session: Session; config: ServerConfig } | Response;
 
 async function prepare(request: Request, deps: HandlerDeps): Promise<Prepared> {
   if (request.method !== 'POST') return json(405, { error: MSG.invalid });
-  if ('missing' in deps.config) return json(503, { error: MSG.notConfigured, missing: deps.config.missing });
+  if ('missing' in deps.config) {
+    // variable names go to the server log only, never to (possibly anonymous) callers
+    console.error('[agent] missing server configuration:', deps.config.missing.join(', '));
+    return json(503, { error: MSG.notConfigured });
+  }
+  const length = Number(request.headers.get('content-length') ?? 0);
+  if (length > MAX_BODY_BYTES) return json(413, { error: MSG.tooLarge });
   const session = await deps.authenticate(request.headers.get('authorization'));
   if (!session) return json(401, { error: MSG.unauthenticated });
   return { session, config: deps.config };
 }
 
+const MAX_BODY_BYTES = 64 * 1024;
+const TOO_LARGE = Symbol('too large');
+
+/** Reads at most MAX_BODY_BYTES (content-length can be absent or wrong with chunked bodies). */
 async function readJson(request: Request): Promise<unknown> {
   try {
-    return await request.json();
+    const reader = request.body?.getReader();
+    if (!reader) return null;
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_BODY_BYTES) {
+        await reader.cancel();
+        return TOO_LARGE;
+      }
+      chunks.push(value);
+    }
+    return JSON.parse(new TextDecoder().decode(Buffer.concat(chunks)));
   } catch {
     return null;
   }
@@ -142,13 +168,14 @@ async function createApproval(
   if (!UUID.test(targetId)) return { approval: null, reply: 'Mình chưa xác định được mục cần xóa. Bạn mô tả rõ hơn nhé.' };
   const runState = result.state.toString();
   try {
-    const approval = await session.approvals.create(action, targetId, runState, signRunState(config.stateSecret, session.userId, runState));
+    const approval = await session.approvals.create(action, targetId, runState, signRunState(config.stateSecret, session.userId, action, targetId, runState));
     const what = action === 'delete_task' ? 'công việc' : 'bảng';
     return { approval, reply: `Bạn cần xác nhận trước khi mình xóa ${what} “${approval.target_label}”.` };
   } catch (err) {
     const reason = err instanceof ApprovalError ? err.reason : String((err as Error)?.message);
     if (reason === 'target_not_found') return { approval: null, reply: 'Không tìm thấy mục cần xóa trong dữ liệu của bạn.' };
-    if (reason === 'too_many_pending') return { approval: null, reply: 'Bạn đang có quá nhiều yêu cầu xóa chờ xác nhận. Hãy xử lý chúng trước.' };
+    if (reason === 'too_many_pending') return { approval: null, reply: 'Bạn đã tạo quá nhiều yêu cầu xóa trong thời gian ngắn. Hãy xử lý các yêu cầu đang chờ hoặc thử lại sau.' };
+    if (reason === 'too_large') return { approval: null, reply: 'Cuộc trò chuyện này quá dài để lưu yêu cầu xóa. Hãy mở cuộc trò chuyện mới rồi yêu cầu xóa lại.' };
     throw err;
   }
 }
@@ -164,7 +191,9 @@ export async function handleChat(request: Request, deps: HandlerDeps): Promise<R
   const prep = await prepare(request, deps);
   if (prep instanceof Response) return prep;
   const { session, config } = prep;
-  const parsed = chatBody.safeParse(await readJson(request));
+  const raw = await readJson(request);
+  if (raw === TOO_LARGE) return json(413, { error: MSG.tooLarge });
+  const parsed = chatBody.safeParse(raw);
   if (!parsed.success) return json(400, { error: MSG.invalid });
   const limited = await rateLimited(session);
   if (limited) return limited;
@@ -211,9 +240,14 @@ export async function handleApproval(request: Request, deps: HandlerDeps): Promi
   const prep = await prepare(request, deps);
   if (prep instanceof Response) return prep;
   const { session, config } = prep;
-  const parsed = approvalBody.safeParse(await readJson(request));
+  const raw = await readJson(request);
+  if (raw === TOO_LARGE) return json(413, { error: MSG.tooLarge });
+  const parsed = approvalBody.safeParse(raw);
   if (!parsed.success) return json(400, { error: MSG.invalid });
   const { approval_id, action, target_id, decision } = parsed.data;
+
+  const limited = await rateLimited(session);
+  if (limited) return limited;
 
   if (decision === 'reject') {
     const r = await session.approvals.reject(approval_id, action, target_id).catch(() => ({ code: 'failed' }));
@@ -221,8 +255,6 @@ export async function handleApproval(request: Request, deps: HandlerDeps): Promi
     return codeResponse(r.code);
   }
 
-  const limited = await rateLimited(session);
-  if (limited) return limited;
   const limits = { ...LIMITS, ...deps.limits };
   const controller = new AbortController();
   // the approval's own date context is not critical for deletion; use the server day
@@ -238,7 +270,7 @@ export async function handleApproval(request: Request, deps: HandlerDeps): Promi
   if (claim.code !== 'ok') return codeResponse(claim.code);
 
   // 2. The stored run state must be the one this server produced for this user.
-  if (!verifyRunState(config.stateSecret, session.userId, claim.run_state, claim.run_state_mac)) return json(422, { error: MSG.mismatch });
+  if (!verifyRunState(config.stateSecret, session.userId, action, target_id, claim.run_state, claim.run_state_mac)) return json(422, { error: MSG.mismatch });
   const agent = createAgent(deps.model);
   let state: RunState<AgentContext, typeof agent>;
   try {
@@ -269,18 +301,25 @@ export async function handleApproval(request: Request, deps: HandlerDeps): Promi
       limits.runTimeoutMs,
       controller,
     );
-    if (!ctx.executed) return json(500, { error: MSG.notDeleted, ...summary(ctx.workspace.events) });
+    if (!ctx.executed) return notExecuted(ctx);
     if (result.interruptions.length > 0) {
       const next = await createApproval(result as RunResult<AgentContext, never>, session, config);
       return json(200, { status: 'executed', reply: `${fallbackReply()} ${next.reply}`, ...summary(ctx.workspace.events), approval: next.approval });
     }
     return json(200, { status: 'executed', reply: String(result.finalOutput || fallbackReply()), ...summary(ctx.workspace.events), approval: null });
   } catch (err) {
+    // A timeout must not race an in-flight deletion: wait for the RPC to settle before answering.
+    if (ctx.execution) await ctx.execution;
     // The deletion is the source of truth: if it happened, say so even when the model failed afterwards.
     if (ctx.executed) return json(200, { status: 'executed', reply: fallbackReply(), ...summary(ctx.workspace.events), approval: null });
-    if (err instanceof MaxTurnsExceededError) return json(500, { error: MSG.notDeleted, ...summary(ctx.workspace.events) });
+    if (ctx.refused || err instanceof MaxTurnsExceededError) return notExecuted(ctx);
     return failure(err, ctx.workspace.events);
   }
+}
+
+function notExecuted(ctx: AgentContext): Response {
+  if (ctx.refused === 'target_changed') return json(409, { error: MSG.targetChanged, ...summary(ctx.workspace.events) });
+  return json(500, { error: MSG.notDeleted, ...summary(ctx.workspace.events) });
 }
 
 function codeResponse(code: string): Response {

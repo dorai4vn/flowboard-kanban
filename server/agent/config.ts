@@ -5,6 +5,7 @@ export const LIMITS = {
   historyChars: 1500,
   maxTurns: 8,
   runTimeoutMs: 45_000,
+  /** Documentation only: the request budget is enforced in Postgres by agent_rate_limit_hit(). */
   requestsPerWindow: 30,
   windowMinutes: 10,
   approvalTtlSeconds: 600,
@@ -25,10 +26,14 @@ export function readServerConfig(env: Record<string, string | undefined> = proce
   const supabaseUrl = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL)?.trim();
   const supabaseKey = (env.SUPABASE_PUBLISHABLE_KEY ?? env.VITE_SUPABASE_PUBLISHABLE_KEY)?.trim();
   const openaiKey = env.OPENAI_API_KEY?.trim();
+  const stateSecret = env.AGENT_STATE_SECRET?.trim();
+  const deployed = Boolean(env.VERCEL) || env.NODE_ENV === 'production';
   const missing = [
     !supabaseUrl && 'SUPABASE_URL',
     !supabaseKey && 'SUPABASE_PUBLISHABLE_KEY',
     !openaiKey && !env.FLOWBOARD_AGENT_MODEL && 'OPENAI_API_KEY',
+    // deployed servers need a dedicated, strong signing secret (no derivation from another credential)
+    deployed && (!stateSecret || stateSecret.length < 32) && 'AGENT_STATE_SECRET',
   ].filter((x): x is string => Boolean(x));
   if (missing.length > 0 || !supabaseUrl || !supabaseKey) return { missing };
   return {
@@ -36,7 +41,7 @@ export function readServerConfig(env: Record<string, string | undefined> = proce
     supabaseKey,
     openaiConfigured: Boolean(openaiKey),
     model: env.OPENAI_MODEL?.trim() || DEFAULT_MODEL,
-    // Dedicated secret if provided; otherwise derived (see runStateMac.ts) from the server-only OpenAI key.
-    stateSecret: env.AGENT_STATE_SECRET?.trim() || `derived:${openaiKey ?? 'scripted-dev'}`,
+    // Dedicated secret (required when deployed); local development may derive one from the server-only key.
+    stateSecret: stateSecret || `derived:${openaiKey ?? 'scripted-dev'}`,
   };
 }

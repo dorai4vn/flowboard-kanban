@@ -28,12 +28,13 @@ export async function authenticate(url: string, publishableKey: string, authoriz
   }
 }
 
-/** Per-user request budget (insert-only log protected by RLS). */
-export async function withinRateLimit(db: FlowboardClient, limit: number, windowMinutes: number): Promise<boolean> {
-  const { error: insertError } = await db.from('agent_requests').insert({});
-  if (insertError) throw new Error('rate_limit_unavailable');
-  const since = new Date(Date.now() - windowMinutes * 60_000).toISOString();
-  const { count, error } = await db.from('agent_requests').select('id', { count: 'exact', head: true }).gte('created_at', since);
+/**
+ * Per-user request budget. The budget (30 requests / 10 minutes) is enforced inside Postgres by
+ * agent_rate_limit_hit(), the only writer of the request log, so a user calling the API directly cannot
+ * grow the log or erase it either.
+ */
+export async function withinRateLimit(db: FlowboardClient): Promise<boolean> {
+  const { data, error } = await db.rpc('agent_rate_limit_hit');
   if (error) throw new Error('rate_limit_unavailable');
-  return (count ?? 0) <= limit;
+  return data === true;
 }

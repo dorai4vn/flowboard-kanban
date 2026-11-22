@@ -3,7 +3,25 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type Database = {
   
-  "public": {
+  "graphql_public": {
+          Tables: {
+            [_ in never]: never
+          }
+          Views: {
+            [_ in never]: never
+          }
+          Functions: {
+            "graphql":
+{ Args: { "extensions"?: Json,"operationName"?: string,"query"?: string,"variables"?: Json }; Returns: Json
+                           }
+          }
+          Enums: {
+            [_ in never]: never
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        },"public": {
           Tables: {
             "agent_approvals": {
                   Row: {
@@ -130,6 +148,9 @@ isOneToOne: false
                            },
 "agent_execute_approval":
 { Args: { "p_action": string,"p_claim": string,"p_id": string,"p_target": string }; Returns: Json
+                           },
+"agent_rate_limit_hit":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "agent_reject_approval":
 { Args: { "p_action": string,"p_id": string,"p_target": string }; Returns: Json
@@ -259,7 +280,11 @@ export type CompositeTypes<
   : never
 
 export const Constants = {
-  "public": {
+  "graphql_public": {
+          Enums: {
+            
+          }
+        },"public": {
           Enums: {
             
           }

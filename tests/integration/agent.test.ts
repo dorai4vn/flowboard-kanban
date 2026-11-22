@@ -134,14 +134,17 @@ describe('AI agent on Supabase Local (real auth, RLS, approvals)', () => {
     expect(data).toEqual([{ status: 'executed' }]);
   });
 
-  it('RATE LIMIT: the per-user request log caps requests and cannot be erased by the user', async () => {
+  it('RATE LIMIT: 30 requests per 10 minutes, enforced in Postgres; the log cannot be written or erased directly', async () => {
     const count = async () => (await B.client.from('agent_requests').select('id', { count: 'exact', head: true })).count ?? 0;
     const base = await count();
     const results: boolean[] = [];
-    for (let i = 0; i < 4; i++) results.push(await withinRateLimit(B.client, base + 3, 10));
-    expect(results).toEqual([true, true, true, false]);
+    for (let i = base; i < 31; i++) results.push(await withinRateLimit(B.client));
+    expect(results.at(-1)).toBe(false);
+    expect(results.slice(0, -1).every(Boolean)).toBe(true);
+    expect(await count()).toBe(30);
+    expect((await B.client.from('agent_requests').insert({})).error).not.toBeNull();
     await B.client.from('agent_requests').delete().gte('created_at', '2000-01-01');
-    expect(await count()).toBe(base + 4);
+    expect(await count()).toBe(30);
     const { data: others } = await B.client.from('agent_requests').select('user_id');
     expect(new Set(others!.map((r) => r.user_id)).size).toBe(1);
   });

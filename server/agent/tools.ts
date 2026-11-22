@@ -12,6 +12,10 @@ export type AgentContext = {
   claim?: { approvalId: string; claimToken: string; action: ApprovalAction; targetId: string };
   /** Set when an approved deletion really happened. */
   executed?: { action: ApprovalAction; label: string };
+  /** Code returned by Postgres when an approved deletion was refused (e.g. 'target_changed'). */
+  refused?: string;
+  /** The in-flight deletion RPC, so a timeout never reports failure while the delete may still commit. */
+  execution?: Promise<void>;
   /**
    * The SDK serializes the run context into the stored run state. Only the date is kept: no board data,
    * repository, Supabase client or credentials ever leave this request.
@@ -144,8 +148,14 @@ function deletionTool(action: ApprovalAction, idField: 'task_id' | 'board_id', d
         return bad('Thao tác xóa cần người dùng phê duyệt trong ứng dụng. Chưa có gì bị xóa.');
       }
       ctx.claim = undefined; // single use
-      const r = await ctx.approvals.execute(claim.approvalId, claim.claimToken, action, targetId);
-      if (r.code !== 'ok') return bad('Không xóa được (mục có thể đã bị xóa hoặc phê duyệt không còn hiệu lực).');
+      const pending = ctx.approvals.execute(claim.approvalId, claim.claimToken, action, targetId);
+      ctx.execution = pending.then(() => undefined, () => undefined);
+      const r = await pending;
+      if (r.code !== 'ok') {
+        ctx.refused = r.code;
+        if (r.code === 'target_changed') return bad('Bảng đã thay đổi sau khi người dùng xem thẻ xác nhận. Chưa có gì bị xóa.');
+        return bad('Không xóa được (mục có thể đã bị xóa hoặc phê duyệt không còn hiệu lực).');
+      }
       const label = r.target_label ?? '';
       ctx.executed = { action, label };
       ctx.workspace.events.push({ kind: action === 'delete_task' ? 'task_deleted' : 'board_deleted', title: label, board: '' });
