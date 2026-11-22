@@ -23,3 +23,13 @@ describe('dates', () => {
     expect(formatDueDate('2026-11-05')).toBe('05/11');
   });
 });
+
+describe('daysBetween', () => {
+  it('counts calendar days between two date keys, across months and years', async () => {
+    const { daysBetween } = await import('./dates');
+    expect(daysBetween('2026-11-20', '2026-11-22')).toBe(2);
+    expect(daysBetween('2026-11-22', '2026-11-22')).toBe(0);
+    expect(daysBetween('2026-12-30', '2027-01-02')).toBe(3);
+    expect(daysBetween('2026-11-22', '2026-11-20')).toBe(-2);
+  });
+});

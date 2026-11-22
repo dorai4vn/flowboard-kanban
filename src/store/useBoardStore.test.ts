@@ -279,3 +279,34 @@ describe('review fixes: recovery after a failed save', () => {
     expect(Object.values(repo.state.boards[active(store).id]!.tasks).map((t) => t.title)).toContain('Làm trong lúc đồng bộ');
   });
 });
+
+describe('completeTask (Today / Overdue views)', () => {
+  it('moves the task to the end of done on ITS board, even when another board is open', async () => {
+    const { store, repo } = await ready();
+    const first = active(store);
+    const taskId = idOf(store, 'Viết báo cáo tuần');
+    store.getState().createBoard('Khác');
+    expect(active(store).name).toBe('Khác');
+    store.getState().completeTask(first.id, taskId);
+    const b = store.getState().app.boards[first.id]!;
+    expect(b.columns.done.at(-1)).toBe(taskId);
+    expect(b.columns.doing).not.toContain(taskId);
+    expect(b.tasks[taskId]!.completedAt).not.toBeNull();
+    expect(active(store).name).toBe('Khác');
+    await store.getState().whenIdle();
+    expect(repo.state.boards[first.id]!.columns.done.at(-1)).toBe(taskId);
+  });
+
+  it('does nothing offline, for unknown boards/tasks, or for tasks already done', async () => {
+    const { store, repo } = await ready();
+    const b = active(store);
+    const doneId = b.columns.done[0]!;
+    store.getState().completeTask(b.id, doneId);
+    store.getState().completeTask('ghost', 'x');
+    store.getState().completeTask(b.id, 'ghost');
+    store.getState().setOnline(false);
+    store.getState().completeTask(b.id, idOf(store, 'Viết báo cáo tuần'));
+    await store.getState().whenIdle();
+    expect(repo.persisted).toHaveLength(0);
+  });
+});

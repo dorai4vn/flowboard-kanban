@@ -1,6 +1,6 @@
-import { addDays, compareDateKeys, toLocalDateKey } from './dates';
+import { addDays, compareDateKeys, daysBetween, toLocalDateKey } from './dates';
 import { normalizeText } from './text';
-import type { Board, ColumnId, Priority, Task } from './types';
+import { COLUMN_IDS, PRIORITIES, type Board, type ColumnId, type Priority, type Task } from './types';
 
 export type DueFilter = 'all' | 'overdue' | 'today' | 'week' | 'none';
 
@@ -108,4 +108,35 @@ export function toFullIndex(full: string[], visible: string[], visibleIndex: num
   if (last === undefined) return rest.length;
   const j = rest.indexOf(last);
   return j >= 0 ? j + 1 : rest.length;
+}
+
+export type FocusKind = 'today' | 'overdue';
+
+export type FocusItem = { task: Task; boardId: string; boardName: string; column: ColumnId; daysLate: number };
+
+/** Tasks across every board that are due today / overdue and not yet in “Hoàn thành”. */
+export function focusTasks(s: { boards: Record<string, Board>; boardOrder: string[] }, kind: FocusKind, today: string): FocusItem[] {
+  const items: FocusItem[] = [];
+  for (const boardId of s.boardOrder) {
+    const b = s.boards[boardId];
+    if (!b) continue;
+    for (const column of COLUMN_IDS) {
+      if (column === 'done') continue;
+      for (const id of b.columns[column]) {
+        const task = b.tasks[id];
+        if (!task?.dueDate) continue;
+        const cmp = compareDateKeys(task.dueDate, today);
+        if ((kind === 'today' && cmp === 0) || (kind === 'overdue' && cmp < 0)) {
+          items.push({ task, boardId, boardName: b.name, column, daysLate: Math.max(0, daysBetween(task.dueDate, today)) });
+        }
+      }
+    }
+  }
+  const rank = (p: Priority) => PRIORITIES.indexOf(p);
+  // stable sort keeps board/column order as the final tie-breaker
+  return items.sort((x, y) =>
+    kind === 'overdue'
+      ? compareDateKeys(x.task.dueDate!, y.task.dueDate!) || rank(y.task.priority) - rank(x.task.priority)
+      : rank(y.task.priority) - rank(x.task.priority),
+  );
 }

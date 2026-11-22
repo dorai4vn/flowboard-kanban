@@ -24,3 +24,10 @@ export function formatDueDate(key: string): string {
   const [, m, d] = parseKey(key);
   return `${pad(d)}/${pad(m)}`;
 }
+
+/** Whole calendar days from `from` to `to` (negative when `to` is earlier). DST-safe: uses UTC dates. */
+export function daysBetween(from: string, to: string): number {
+  const [fy, fm, fd] = parseKey(from);
+  const [ty, tm, td] = parseKey(to);
+  return Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(fy, fm - 1, fd)) / 86_400_000);
+}

@@ -39,6 +39,8 @@ export type BoardStoreState = {
   updateTask: (id: string, patch: Partial<TaskInput>) => string | null;
   deleteTask: (id: string) => void;
   moveTask: (id: string, to: ColumnId, toIndex: number) => void;
+  /** Mark a task done on the board that holds it (Today / Overdue views work across boards). */
+  completeTask: (boardId: string, taskId: string) => void;
   setFilter: (patch: Partial<TaskFilter>) => void;
   resetFilter: () => void;
   dismissNotice: () => void;
@@ -296,6 +298,12 @@ export function createBoardStore({ repo, now = () => new Date(), prefs = null, i
         const b = active();
         if (blocked() || !b) return;
         const m = planMove(b, id, to, toIndex, iso());
+        if (m) commit(m);
+      },
+      completeTask: (boardId, taskId) => {
+        const b = get().app.boards[boardId];
+        if (blocked() || !b?.tasks[taskId] || b.columns.done.includes(taskId)) return;
+        const m = planMove(b, taskId, 'done', b.columns.done.length, iso());
         if (m) commit(m);
       },
       setFilter: (patch) => set({ filter: { ...get().filter, ...patch } }),
