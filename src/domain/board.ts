@@ -1,5 +1,5 @@
-import { newId } from './ids';
-import { LIMITS, type AccentColor, type Board, type Label, type LabelColor, type Result } from './types';
+import { newId } from './ids.js';
+import { LIMITS, type AccentColor, type Board, type Label, type LabelColor, type Result } from './types.js';
 
 const DEFAULT_LABELS: ReadonlyArray<[string, LabelColor]> = [
   ['Học tập', 'blue'],

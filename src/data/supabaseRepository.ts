@@ -1,8 +1,8 @@
-import type { FlowboardClient } from '../lib/supabase';
-import type { Board } from '../domain/types';
-import { boardToRpc, rowsToState, taskToRpc } from './mappers';
-import type { BoardsState, Mutation } from './mutations';
-import { RepositoryError, withTimeout, type BoardRepository } from './repository';
+import type { FlowboardClient } from '../lib/supabase.js';
+import type { Board } from '../domain/types.js';
+import { boardToRpc, rowsToState, taskToRpc } from './mappers.js';
+import type { BoardsState, Mutation } from './mutations.js';
+import { RepositoryError, withTimeout, type BoardRepository } from './repository.js';
 
 type Res<T> = { data: T | null; error: unknown };
 

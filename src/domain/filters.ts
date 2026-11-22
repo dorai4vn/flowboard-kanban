@@ -1,6 +1,6 @@
-import { addDays, compareDateKeys, daysBetween, toLocalDateKey } from './dates';
-import { normalizeText } from './text';
-import { COLUMN_IDS, PRIORITIES, type Board, type ColumnId, type Priority, type Task } from './types';
+import { addDays, compareDateKeys, daysBetween, toLocalDateKey } from './dates.js';
+import { normalizeText } from './text.js';
+import { COLUMN_IDS, PRIORITIES, type Board, type ColumnId, type Priority, type Task } from './types.js';
 
 export type DueFilter = 'all' | 'overdue' | 'today' | 'week' | 'none';
 

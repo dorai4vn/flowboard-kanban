@@ -1,5 +1,5 @@
-import type { Board } from '../domain/types';
-import type { BoardsState, Mutation } from './mutations';
+import type { Board } from '../domain/types.js';
+import type { BoardsState, Mutation } from './mutations.js';
 
 /** Where the signed-in user's boards live. Implementations must throw on failure and honour `signal`. */
 export interface BoardRepository {

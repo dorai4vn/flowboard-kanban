@@ -1,5 +1,5 @@
-import { findColumn, moveTask } from '../domain/task';
-import type { AccentColor, Board, ColumnId, Label, Task } from '../domain/types';
+import { findColumn, moveTask } from '../domain/task.js';
+import type { AccentColor, Board, ColumnId, Label, Task } from '../domain/types.js';
 
 export type BoardsState = { boards: Record<string, Board>; boardOrder: string[] };
 
