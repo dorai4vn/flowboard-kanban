@@ -132,25 +132,30 @@ export function TaskDialog({ board, editor, onClose }: { board: Board; editor: E
               );
             })}
           </div>
-          <div className="mt-2.5 flex flex-wrap items-center gap-2">
-            <label htmlFor="new-label" className="sr-only">
-              Tên nhãn mới
-            </label>
-            <input
-              id="new-label"
-              className={`${inputClass} !w-40 !py-1.5 text-xs`}
-              value={newLabel}
-              maxLength={30}
-              placeholder="Nhãn mới…"
-              onChange={(e) => setNewLabel(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  createLabel();
-                }
-              }}
-            />
-            <div role="radiogroup" aria-label="Màu nhãn mới" className="flex gap-1">
+          <div className="mt-3 flex flex-col gap-2 rounded-xl border border-line bg-bg/40 p-2.5">
+            <div className="flex items-center gap-2">
+              <label htmlFor="new-label" className="sr-only">
+                Tên nhãn mới
+              </label>
+              <input
+                id="new-label"
+                className={`${inputClass} !py-1.5 text-xs`}
+                value={newLabel}
+                maxLength={30}
+                placeholder="Tạo nhãn mới…"
+                onChange={(e) => setNewLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    createLabel();
+                  }
+                }}
+              />
+              <button type="button" onClick={createLabel} className={`${buttonGhost} shrink-0 !px-2.5 !py-1.5 text-xs`}>
+                <Plus size={13} /> Thêm nhãn
+              </button>
+            </div>
+            <div role="radiogroup" aria-label="Màu nhãn mới" className="flex flex-wrap gap-1.5 px-0.5">
               {LABEL_COLORS.map((c) => (
                 <button
                   key={c}
@@ -163,9 +168,6 @@ export function TaskDialog({ board, editor, onClose }: { board: Board; editor: E
                 />
               ))}
             </div>
-            <button type="button" onClick={createLabel} className={`${buttonGhost} !px-2 !py-1 text-xs`}>
-              <Plus size={13} /> Thêm nhãn
-            </button>
           </div>
           {labelError && (
             <p role="alert" className="mt-1.5 text-xs text-red-300">

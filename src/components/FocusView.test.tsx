@@ -61,7 +61,7 @@ describe('Today view', () => {
     const { user } = await renderApp();
     await user.click(go(/^Hôm nay/));
     await user.click(screen.getByRole('button', { name: 'Đánh dấu hoàn thành Hoàn thành bài tập buổi 8' }));
-    expect(screen.getByText('Không có việc nào đến hạn hôm nay.')).toBeInTheDocument();
+    expect(screen.getByText('Bạn đã xong mọi việc đến hạn hôm nay.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Về bảng công việc' }));
     expect(screen.getByRole('region', { name: 'Hoàn thành' })).toHaveTextContent('Hoàn thành bài tập buổi 8');
   });
@@ -72,11 +72,12 @@ describe('Overdue view', () => {
     const { user } = await renderApp();
     await user.click(go(/^Quá hạn/));
     expect(screen.getByRole('heading', { level: 2, name: 'Quá hạn' })).toBeInTheDocument();
-    const list = screen.getByRole('list', { name: 'Việc quá hạn' });
+    const list = screen.getByRole('region', { name: 'Việc quá hạn' });
+    const [row] = within(list).getAllByRole('listitem');
     expect(within(list).getAllByRole('listitem')).toHaveLength(1);
-    expect(within(list).getByText('Viết báo cáo tuần')).toBeInTheDocument();
-    expect(within(list).getByText('Trễ 1 ngày')).toBeInTheDocument();
-    expect(within(list).getByText('Khẩn')).toBeInTheDocument();
+    expect(within(row!).getByText('Viết báo cáo tuần')).toBeInTheDocument();
+    expect(within(row!).getByText('Trễ 1 ngày')).toBeInTheDocument();
+    expect(within(row!).getByText('Khẩn')).toBeInTheDocument();
   });
 
   it('completing a task removes it, updates the count and moves it to Hoàn thành', async () => {

@@ -1,6 +1,10 @@
 import { expect, test } from './fixtures';
 import { card, column, createTask, dragTo, settled } from './helpers';
 
+// Mouse drags must start away from the viewport edges: dnd-kit auto-scrolls when the pointer is within
+// 20% of an edge (correct app behaviour), which would move the drop target mid-drag on a 720px viewport.
+test.use({ viewport: { width: 1280, height: 1000 } });
+
 
 test('create → edit → drag to Hoàn thành → survives reload', async ({ page }) => {
   await createTask(page, 'Cần làm', 'E2E nộp bài', { priority: 'Khẩn', label: 'Gấp' });

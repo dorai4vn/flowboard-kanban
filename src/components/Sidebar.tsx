@@ -1,4 +1,4 @@
-import { AlarmClock, CalendarCheck2, LayoutDashboard } from 'lucide-react';
+import { AlarmClock, CalendarCheck2, LayoutDashboard, Plus } from 'lucide-react';
 import type { Board } from '../domain/types';
 import { ACCENT_SWATCH } from './styles';
 
@@ -11,6 +11,8 @@ type Props = {
   boards: Board[];
   activeBoardId: string;
   onOpenBoard: (id: string) => void;
+  onCreateBoard: () => void;
+  readOnly?: boolean;
 };
 
 function Logo() {
@@ -39,7 +41,7 @@ export function MobileBrand() {
  * Desktop: a left rail with views and boards. Mobile: the same <nav> becomes a bottom tab bar and the
  * rest of the rail is hidden — every control is rendered once.
  */
-export function Sidebar({ view, onView, counts, boards, activeBoardId, onOpenBoard }: Props) {
+export function Sidebar({ view, onView, counts, boards, activeBoardId, onOpenBoard, onCreateBoard, readOnly = false }: Props) {
   const items = [
     { id: 'board' as const, label: 'Bảng', icon: LayoutDashboard, count: null, tone: '' },
     { id: 'today' as const, label: 'Hôm nay', icon: CalendarCheck2, count: counts.today, tone: 'bg-today/15 text-today' },
@@ -66,10 +68,11 @@ export function Sidebar({ view, onView, counts, boards, activeBoardId, onOpenBoa
               aria-current={current ? 'page' : undefined}
               aria-label={count === null ? label : `${label} ${count}`}
               onClick={() => onView(id)}
-              className={`group flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[11px] font-semibold transition md:flex-row md:gap-2.5 md:px-2.5 md:py-2 md:text-sm ${
-                current ? 'text-fg md:bg-white/[0.06]' : 'text-muted hover:text-fg md:hover:bg-white/[0.03]'
+              className={`group relative flex flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[11px] font-semibold transition md:flex-row md:gap-2.5 md:px-2.5 md:py-2 md:text-sm ${
+                current ? 'text-accent-strong md:bg-white/[0.06] md:text-fg' : 'text-muted hover:text-fg md:hover:bg-white/[0.03]'
               }`}
             >
+              {current && <span className="absolute -top-1.5 left-1/2 h-0.5 w-8 -translate-x-1/2 rounded-full bg-accent md:hidden" aria-hidden="true" />}
               <span className="relative">
                 <Icon size={18} className={current ? 'text-accent' : ''} aria-hidden="true" />
                 {count !== null && count > 0 && <span className={`absolute -right-2 -top-1 h-2 w-2 rounded-full md:hidden ${id === 'today' ? 'bg-today' : 'bg-late'}`} aria-hidden="true" />}
@@ -111,6 +114,15 @@ export function Sidebar({ view, onView, counts, boards, activeBoardId, onOpenBoa
             );
           })}
         </ul>
+        <button
+          type="button"
+          onClick={onCreateBoard}
+          disabled={readOnly}
+          className="mt-1 flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-muted transition hover:bg-white/[0.03] hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Plus size={14} aria-hidden="true" />
+          Thêm bảng
+        </button>
       </div>
     </aside>
   );

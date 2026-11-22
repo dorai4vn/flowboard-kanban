@@ -14,7 +14,7 @@ test('Today and Overdue views list the right tasks with live counts', async ({ p
   await expect(today).toContainText('Bảng của tôi');
 
   await nav(page).getByRole('button', { name: /^Quá hạn/ }).click();
-  const late = page.getByRole('list', { name: 'Việc quá hạn' });
+  const late = page.getByRole('region', { name: 'Việc quá hạn' });
   await expect(late.getByRole('listitem')).toHaveCount(1);
   await expect(late).toContainText('Viết báo cáo tuần');
   await expect(late).toContainText('Trễ 1 ngày');

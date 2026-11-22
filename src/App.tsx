@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { toLocalDateKey } from './domain/dates';
-import { focusTasks, type FocusItem } from './domain/filters';
+import { focusTasks, overdueBuckets, todayPlan, type FocusItem } from './domain/filters';
+import { BoardOverview } from './components/BoardOverview';
+import { NewBoardDialog } from './components/NewBoardDialog';
 import { TaskDialog, type EditorState } from './components/TaskDialog';
 import { BoardView } from './components/BoardView';
 import { FilterBar } from './components/FilterBar';
@@ -28,10 +30,13 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
   const boardOrder = useBoardStore((s) => s.app.boardOrder);
   const setActiveBoard = useBoardStore((s) => s.setActiveBoard);
   const completeTask = useBoardStore((s) => s.completeTask);
-  const focus = useMemo(
-    () => ({ today: focusTasks({ boards, boardOrder }, 'today', today), overdue: focusTasks({ boards, boardOrder }, 'overdue', today) }),
-    [boards, boardOrder, today],
-  );
+  const rescheduleTask = useBoardStore((s) => s.rescheduleTask);
+  const [creatingBoard, setCreatingBoard] = useState(false);
+  const focus = useMemo(() => {
+    const plan = todayPlan({ boards, boardOrder }, today);
+    const overdue = focusTasks({ boards, boardOrder }, 'overdue', today);
+    return { plan, overdue, buckets: overdueBuckets(overdue) };
+  }, [boards, boardOrder, today]);
 
   // Dialogs are portalled to <body>, so the accent also lives on <html>.
   // Offline = read-only (no offline write queue by design).
@@ -65,6 +70,13 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
     setActiveBoard(item.boardId);
     setEditor({ mode: 'edit', id: item.task.id });
   };
+  const focusActions = {
+    today,
+    readOnly: !online,
+    onOpen: openFromFocus,
+    onComplete: (item: FocusItem) => completeTask(item.boardId, item.task.id),
+    onBackToBoard: () => setView('board'),
+  };
   const openBoard = (id: string) => {
     setActiveBoard(id);
     setView('board');
@@ -75,10 +87,12 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
       <Sidebar
         view={view}
         onView={setView}
-        counts={{ today: focus.today.length, overdue: focus.overdue.length }}
+        counts={{ today: focus.plan.pending.length, overdue: focus.overdue.length }}
         boards={boardOrder.map((id) => boards[id]!)}
         activeBoardId={board.id}
         onOpenBoard={openBoard}
+        onCreateBoard={() => setCreatingBoard(true)}
+        readOnly={!online}
       />
       <div className="min-w-0">
         <Header board={board} view={view} account={account} onSignOut={onSignOut} readOnly={!online} saving={saving}>
@@ -87,6 +101,8 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
         <main className="mx-auto max-w-[1400px] px-4 pb-28 pt-5 sm:px-6 md:pb-10">
           {!online && <OfflineBanner />}
           {view === 'board' ? (
+            <>
+            <BoardOverview board={board} today={today} />
             <BoardView
               board={board}
               filter={filter}
@@ -95,20 +111,30 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
               onAdd={(column) => setEditor({ mode: 'create', column })}
               onOpen={(id) => setEditor({ mode: 'edit', id })}
             />
-          ) : (
+            </>
+          ) : view === 'today' ? (
             <FocusView
-              kind={view}
-              items={focus[view]}
-              today={today}
-              readOnly={!online}
-              onOpen={openFromFocus}
-              onComplete={(item) => completeTask(item.boardId, item.task.id)}
-              onBackToBoard={() => setView('board')}
+              kind="today"
+              pending={focus.plan.pending}
+              done={focus.plan.done}
+              overdueCount={focus.overdue.length}
+              onShowOverdue={() => setView('overdue')}
+              {...focusActions}
             />
+          ) : (
+            <FocusView kind="overdue" buckets={focus.buckets} onReschedule={(item) => rescheduleTask(item.boardId, item.task.id, today)} {...focusActions} />
           )}
         </main>
       </div>
       {editor && <TaskDialog key={editor.mode === 'edit' ? editor.id : editor.column} board={board} editor={editor} onClose={() => setEditor(null)} />}
+      {creatingBoard && (
+        <NewBoardDialog
+          onClose={() => {
+            setCreatingBoard(false);
+            setView('board');
+          }}
+        />
+      )}
       {notice && <Toast message={notice} onClose={dismissNotice} />}
     </div>
   );

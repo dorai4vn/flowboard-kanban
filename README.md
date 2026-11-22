@@ -8,7 +8,7 @@ hạn chót, độ ưu tiên, nhãn màu, tìm kiếm/lọc, chế độ tập t
 > Bài tập buổi 8 khóa học AI Agent, xây dựng theo phương pháp **Agentic Engineering** với plugin Superpowers:
 > Brainstorm → Spec → Implementation Plan → Code theo plan (TDD) → Review → Bàn giao có bằng chứng.
 
-![FlowBoard trên desktop](docs/screenshots/m10-board.png)
+![FlowBoard trên desktop](docs/screenshots/m10/desktop-board.png)
 
 ## Tính năng
 
