@@ -31,8 +31,11 @@ export function createSupabaseAuth(client: FlowboardClient): AuthClient {
   return {
     async getUser() {
       // With PKCE + detectSessionInUrl, getSession() waits for the ?code exchange to finish.
+      const hadCode = new URLSearchParams(window.location.search).has('code');
       const { data, error } = await client.auth.getSession();
       cleanUrl(['code']);
+      // Returning from Google without a session means the code exchange failed: let the UI explain.
+      if (hadCode && (error || !data.session)) throw new Error('oauth code exchange failed');
       if (error) return null;
       return toAuthUser(data.session?.user);
     },

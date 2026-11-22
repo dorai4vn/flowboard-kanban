@@ -65,6 +65,7 @@ export function createBoardStore({ repo, now = () => new Date(), prefs = null, i
   let confirmed: BoardsState = EMPTY; // last state the server acknowledged
   let chain: Promise<void> = Promise.resolve();
   let pending = 0;
+  let writeSeq = 0; // bumps on every optimistic change, so a re-sync never hides a newer one
 
   const prefKey = (userId: string) => `flowboard:activeBoard:${userId}`;
   const readPref = (userId: string) => {
@@ -110,6 +111,26 @@ export function createBoardStore({ repo, now = () => new Date(), prefs = null, i
       }
     };
 
+    /** Replace the confirmed state with the server's after a failed save. */
+    const resync = async (myEpoch: number, seq: number) => {
+      if (myEpoch !== epoch) return;
+      try {
+        const data = await repo.load(controller.signal);
+        if (myEpoch !== epoch) return;
+        if (seq !== writeSeq) {
+          // the user changed something meanwhile: keep their view, the queued writes build on the server state
+          confirmed = data;
+          return;
+        }
+        confirmed = data;
+        if (data.boardOrder.length === 0) set({ status: 'error', app: view(data) });
+        else set({ app: view(data) });
+      } catch {
+        if (myEpoch !== epoch) return;
+        if (confirmed.boardOrder.length === 0 && seq === writeSeq) set({ status: 'error' });
+      }
+    };
+
     /** Check that a write may happen now. Returns an error message or null. */
     const blocked = (): string | null => {
       const s = get();
@@ -135,6 +156,9 @@ export function createBoardStore({ repo, now = () => new Date(), prefs = null, i
           if (!current()) return;
           generation++; // drop every write queued behind the failed one
           set({ app: view(confirmed), notice: SAVE_FAILED_NOTICE });
+          // The write may have reached the server anyway (lost response): re-read the truth.
+          const seq = writeSeq;
+          chain = chain.then(() => resync(myEpoch, seq));
         } finally {
           if (myEpoch === epoch) {
             pending = Math.max(0, pending - 1);
@@ -146,6 +170,7 @@ export function createBoardStore({ repo, now = () => new Date(), prefs = null, i
 
     /** Apply optimistically, then queue for persistence. */
     const commit = (...ms: Mutation[]) => {
+      writeSeq++;
       let next: BoardsState = get().app;
       for (const m of ms) next = applyMutation(next, m);
       set({ app: view(next) });

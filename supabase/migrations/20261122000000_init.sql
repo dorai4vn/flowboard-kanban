@@ -37,6 +37,8 @@ create table public.tasks (
   completed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  -- a task is completed exactly when it sits in the done column
+  check ((status = 'done') = (completed_at is not null)),
   unique (id, user_id),
   foreign key (board_id, user_id) references public.boards (id, user_id) on delete cascade
 );
@@ -117,6 +119,15 @@ begin
          coalesce((t ->> 'created_at')::timestamptz, now()), coalesce((t ->> 'updated_at')::timestamptz, now())
   from jsonb_array_elements(coalesce(p_tasks, '[]'::jsonb)) as t;
 
+  if exists (
+    select 1
+    from jsonb_array_elements(coalesce(p_tasks, '[]'::jsonb)) as t,
+         jsonb_array_elements_text(coalesce(t -> 'label_ids', '[]'::jsonb)) as lid
+    where not exists (select 1 from public.labels l where l.id = lid::uuid and l.board_id = v_board)
+  ) then
+    raise exception 'label of another board' using errcode = '22023';
+  end if;
+
   insert into public.task_labels (task_id, label_id)
   select (t ->> 'id')::uuid, lid::uuid
   from jsonb_array_elements(coalesce(p_tasks, '[]'::jsonb)) as t,
@@ -165,6 +176,14 @@ begin
     );
   end if;
 
+  select t.board_id into v_board from public.tasks t where t.id = v_id;
+  if exists (
+    select 1 from unnest(coalesce(p_label_ids, '{}'::uuid[])) as lid
+    where not exists (select 1 from public.labels l where l.id = lid and l.board_id = v_board)
+  ) then
+    raise exception 'label of another board' using errcode = '22023';
+  end if;
+
   delete from public.task_labels where task_id = v_id;
   insert into public.task_labels (task_id, label_id)
   select v_id, lid from unnest(coalesce(p_label_ids, '{}'::uuid[])) as lid;
@@ -187,6 +206,9 @@ begin
   select board_id into v_board from public.tasks where id = p_task_id;
   if v_board is null then
     raise exception 'task not found' using errcode = 'P0002';
+  end if;
+  if p_ordered_ids is null or p_status is null then
+    raise exception 'invalid order' using errcode = '22023';
   end if;
 
   if not (p_task_id = any (p_ordered_ids))

@@ -147,6 +147,14 @@ describe('AuthGate', () => {
     expect(store.getState().app).toBe(app);
   });
 
+  it('a failed OAuth code exchange returns to the login screen with an explanation', async () => {
+    const auth = new FakeAuth(null);
+    auth.pendingGetUser = Promise.reject(new Error('exchange failed'));
+    setup(auth);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không đăng nhập được, vui lòng thử lại.');
+    expect(screen.getByRole('button', { name: 'Đăng nhập bằng Google' })).toBeInTheDocument();
+  });
+
   it('a failed load shows an error with a working retry button', async () => {
     const repo = new FakeRepository(seeded());
     repo.failLoad = true;

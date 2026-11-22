@@ -3,7 +3,7 @@ import App from '../App';
 import { LoginScreen } from '../components/LoginScreen';
 import { StatusScreen } from '../components/StatusScreen';
 import { getAppStore, useBoardStore } from '../store/useBoardStore';
-import type { AuthClient, AuthUser } from './authClient';
+import { LOGIN_ERROR, type AuthClient, type AuthUser } from './authClient';
 
 /**
  * Owns the session: restores it, follows sign-in/out/user changes and tells the store to switch user.
@@ -13,6 +13,7 @@ export function AuthGate({ auth, today }: { auth: AuthClient; today?: string }) 
   const [checking, setChecking] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [redirectError] = useState(() => auth.redirectError?.() ?? null);
+  const [exchangeError, setExchangeError] = useState<string | null>(null);
   const status = useBoardStore((s) => s.status);
   const reload = useBoardStore((s) => s.reload);
 
@@ -32,7 +33,12 @@ export function AuthGate({ auth, today }: { auth: AuthClient; today?: string }) 
     });
     auth.getUser().then(
       (u) => !changed && apply(u),
-      () => !changed && apply(null),
+      () => {
+        // e.g. the ?code from Google could not be exchanged (expired, opened in another browser)
+        if (changed) return;
+        setExchangeError(LOGIN_ERROR);
+        apply(null);
+      },
     );
     return () => {
       alive = false;
@@ -48,7 +54,7 @@ export function AuthGate({ auth, today }: { auth: AuthClient; today?: string }) 
   };
 
   if (checking) return <StatusScreen title="Đang kiểm tra đăng nhập…" busy />;
-  if (!user) return <LoginScreen onLogin={() => auth.signInWithGoogle()} error={redirectError} />;
+  if (!user) return <LoginScreen onLogin={() => auth.signInWithGoogle()} error={redirectError ?? exchangeError} />;
   if (status === 'loading' || status === 'signedOut') return <StatusScreen title="Đang tải bảng…" busy />;
   if (status === 'error') {
     return (

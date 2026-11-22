@@ -238,3 +238,44 @@ describe('offline', () => {
     expect(store.getState().createTask({ title: 'X' }, 'todo')).toBeNull();
   });
 });
+
+describe('review fixes: recovery after a failed save', () => {
+  it('deleting the last board when its replacement fails to save ends in a recoverable error, not an empty screen', async () => {
+    const { store, repo } = await ready();
+    repo.failWhen = (m) => m.type === 'createBoard';
+    store.getState().deleteBoard(active(store).id);
+    await store.getState().whenIdle();
+    expect(store.getState().status).toBe('error');
+    repo.failWhen = () => false;
+    await store.getState().reload();
+    expect(store.getState().status).toBe('ready');
+    expect(store.getState().app.boardOrder).toHaveLength(1);
+  });
+
+  it('after a rollback the store re-syncs with what the server really has', async () => {
+    const { store, repo } = await ready();
+    const a = idOf(store, 'Mua quà sinh nhật');
+    repo.failAfterCommitWhen = () => true; // server saved the move, the response was lost
+    store.getState().moveTask(a, 'done', 0);
+    await store.getState().whenIdle();
+    expect(store.getState().notice).toBe(SAVE_FAILED_NOTICE);
+    expect(titles(store, 'done')[0]).toBe('Mua quà sinh nhật');
+  });
+
+  it('the re-sync does not overwrite a change made while it was loading', async () => {
+    const { store, repo } = await ready();
+    repo.hold = true;
+    repo.failWhen = (_m, i) => i === 0;
+    store.getState().moveTask(idOf(store, 'Mua quà sinh nhật'), 'done', 0);
+    await tick();
+    repo.release(); // the move fails → rollback, re-sync load starts
+    await tick();
+    store.getState().createTask({ title: 'Làm trong lúc đồng bộ' }, 'todo');
+    repo.release(); // re-sync load
+    await tick();
+    repo.release(); // createTask persist
+    await store.getState().whenIdle();
+    expect(titles(store, 'todo')).toContain('Làm trong lúc đồng bộ');
+    expect(Object.values(repo.state.boards[active(store).id]!.tasks).map((t) => t.title)).toContain('Làm trong lúc đồng bộ');
+  });
+});

@@ -18,6 +18,8 @@ export class FakeRepository implements BoardRepository {
   hold = false;
   failLoad = false;
   failWhen: (m: Mutation, index: number) => boolean = () => false;
+  /** Simulate a write that the server committed but whose response was lost. */
+  failAfterCommitWhen: (m: Mutation, index: number) => boolean = () => false;
   readonly persisted: Mutation[] = [];
   readonly signals: AbortSignal[] = [];
   starterCalls = 0;
@@ -68,6 +70,7 @@ export class FakeRepository implements BoardRepository {
       if (this.failWhen(m, index)) throw new RepositoryError();
       this.persisted.push(m);
       this.state = applyMutation(this.state, structuredClone(m));
+      if (this.failAfterCommitWhen(m, index)) throw new RepositoryError();
     } finally {
       this.inFlight--;
     }

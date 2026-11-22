@@ -2,7 +2,7 @@ import type { FlowboardClient } from '../lib/supabase';
 import type { Board } from '../domain/types';
 import { boardToRpc, rowsToState, taskToRpc } from './mappers';
 import type { BoardsState, Mutation } from './mutations';
-import { RepositoryError, type BoardRepository } from './repository';
+import { RepositoryError, withTimeout, type BoardRepository } from './repository';
 
 type Res<T> = { data: T | null; error: unknown };
 
@@ -20,7 +20,8 @@ function exactlyOne(res: Res<unknown[]>): void {
 export class SupabaseRepository implements BoardRepository {
   constructor(private readonly db: FlowboardClient) {}
 
-  async load(signal: AbortSignal): Promise<BoardsState> {
+  async load(session: AbortSignal): Promise<BoardsState> {
+    const signal = withTimeout(session);
     try {
       const [boards, labels, tasks, taskLabels] = await Promise.all([
         this.db.from('boards').select('id, user_id, name, accent, position, created_at').abortSignal(signal),
@@ -37,13 +38,14 @@ export class SupabaseRepository implements BoardRepository {
     }
   }
 
-  async ensureStarter(seed: Board, signal: AbortSignal): Promise<void> {
+  async ensureStarter(seed: Board, session: AbortSignal): Promise<void> {
+    const signal = withTimeout(session);
     await this.call(() => this.db.rpc('create_board', { ...boardToRpc(seed), p_only_if_empty: true }).abortSignal(signal));
   }
 
-  async persist(m: Mutation, signal: AbortSignal): Promise<void> {
+  async persist(m: Mutation, session: AbortSignal): Promise<void> {
     try {
-      await this.write(m, signal);
+      await this.write(m, withTimeout(session));
     } catch {
       throw new RepositoryError();
     }

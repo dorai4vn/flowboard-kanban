@@ -2,6 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 import { localStatus, publicKey } from './tests/support/localSupabase';
 
 const baseURL = process.env.BASE_URL ?? 'http://localhost:4173';
+// Tests sign in with Supabase Local sessions: never point them at a deployed site.
+if (!['localhost', '127.0.0.1'].includes(new URL(baseURL).hostname)) {
+  throw new Error('E2E only runs against a local app backed by Supabase Local');
+}
 
 export default defineConfig({
   testDir: './tests/e2e',
