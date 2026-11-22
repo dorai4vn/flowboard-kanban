@@ -37,7 +37,8 @@ test('drags with the keyboard (Space, arrow, Space)', async ({ page }) => {
   await card(page, 'Mua quà sinh nhật').focus();
   const live = page.locator('[id^="DndLiveRegion"]');
   await page.keyboard.press('Space');
-  await expect(live).toContainText('Mua quà sinh nhật');
+  // wait until dnd-kit has measured the columns (it then announces the current column)
+  await expect(live).toHaveText('Công việc Mua quà sinh nhật đang ở cột Cần làm.');
   await page.keyboard.press('ArrowRight');
   await expect(live).toHaveText('Công việc Mua quà sinh nhật đang ở cột Đang làm.');
   await page.keyboard.press('Space');

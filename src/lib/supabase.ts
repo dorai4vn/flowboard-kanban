@@ -25,6 +25,14 @@ export function createSupabaseClient(url: string, publishableKey: string, option
 
 export type SupabaseConfig = { url: string; publishableKey: string };
 
+export const SUPABASE_ENV_VARS = ['VITE_SUPABASE_URL', 'VITE_SUPABASE_PUBLISHABLE_KEY'] as const;
+export type EnvPresence = Record<(typeof SUPABASE_ENV_VARS)[number], 'present' | 'missing'>;
+
+/** Which config variables this build received — names and present/missing only, never values. */
+export function describeSupabaseConfig(env: Record<string, string | undefined> = import.meta.env): EnvPresence {
+  return Object.fromEntries(SUPABASE_ENV_VARS.map((name) => [name, env[name]?.trim() ? 'present' : 'missing'])) as EnvPresence;
+}
+
 /** Read the Vite env. Returns null when not configured so the UI can explain instead of crashing. */
 export function readSupabaseConfig(env: Record<string, string | undefined> = import.meta.env): SupabaseConfig | null {
   const url = env.VITE_SUPABASE_URL?.trim();

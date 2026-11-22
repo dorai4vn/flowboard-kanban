@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import { AuthGate } from './auth/AuthGate';
 import { createSupabaseAuth } from './auth/supabaseAuth';
-import { StatusScreen } from './components/StatusScreen';
+import { ConfigMissingScreen } from './components/ConfigMissingScreen';
 import { SupabaseRepository } from './data/supabaseRepository';
 import { createSupabaseClient, readSupabaseConfig } from './lib/supabase';
 import { createBoardStore, setAppStore } from './store/useBoardStore';
@@ -20,11 +20,7 @@ const root = createRoot(document.getElementById('root')!);
 const config = readSupabaseConfig();
 
 if (!config) {
-  root.render(
-    <StatusScreen title="Thiếu cấu hình Supabase.">
-      <p className="max-w-sm text-xs text-muted">Hãy tạo file .env.local từ .env.example (VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY) rồi chạy lại.</p>
-    </StatusScreen>,
-  );
+  root.render(<ConfigMissingScreen />);
 } else {
   const client = createSupabaseClient(config.url, config.publishableKey);
   setAppStore(createBoardStore({ repo: new SupabaseRepository(client), prefs: safeLocalStorage(), initialOnline: navigator.onLine }));

@@ -97,3 +97,18 @@ npm run test:e2e          # Playwright trên Supabase Local
 npm run check             # lint + typecheck + unit + build
 npm run check:secrets     # quét secret trong repo và dist/
 ```
+
+## Xử lý sự cố: Vercel Preview báo “Thiếu cấu hình Supabase.”
+
+Biến `VITE_*` được **gắn vào bundle lúc build**: thêm/sửa biến xong phải có **deployment mới được build sau đó**.
+
+1. Mở Build Logs của deployment, tìm dòng `[check-build-env]`:
+   - `VERCEL_ENV=preview branch=claude/m9-supabase` + hai dòng `present` → build đã nhận đủ biến.
+   - Có `missing` → build **dừng** với thông báo nêu đúng tên biến và môi trường.
+2. Nếu thiếu, vào Vercel → đúng project `flowboard-kanban` → Settings → Environment Variables, kiểm tra:
+   - Tên chính xác `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (có tiền tố `VITE_`, không khoảng trắng).
+   - Cột **Environments** có **Preview**; nếu Preview bị giới hạn theo nhánh thì nhánh phải là `claude/m9-supabase` (hoặc để trống = mọi nhánh).
+   - Giá trị không rỗng.
+3. Tạo deployment mới: push một commit lên `claude/m9-supabase`, hoặc Deployments → deployment mới nhất của nhánh đó → ⋯ → Redeploy (bỏ chọn “Use existing Build Cache”).
+4. Mở **URL của deployment mới** (hoặc alias nhánh `…-git-claude-m9-supabase-…vercel.app`), không mở lại URL cũ.
+5. Màn hình thiếu cấu hình giờ liệt kê từng biến `có/thiếu` (không hiện giá trị) để đối chiếu nhanh.
