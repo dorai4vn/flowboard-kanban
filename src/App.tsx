@@ -19,6 +19,7 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
   const dismissNotice = useBoardStore((s) => s.dismissNotice);
   const online = useBoardStore((s) => s.online);
   const setOnline = useBoardStore((s) => s.setOnline);
+  const saving = useBoardStore((s) => s.saving);
   const [editor, setEditor] = useState<EditorState | null>(null);
 
   // Dialogs are portalled to <body>, so the accent also lives on <html>.
@@ -34,6 +35,14 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
     };
   }, [setOnline]);
 
+  // Leaving while a write is still on its way would lose it: let the browser ask first.
+  useEffect(() => {
+    if (!saving) return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [saving]);
+
   const accent = board?.accent ?? 'indigo';
   useEffect(() => {
     document.documentElement.dataset.accent = accent;
@@ -43,7 +52,7 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
 
   return (
     <div data-accent={board.accent} className="board-glow min-h-dvh">
-      <Header board={board} account={account} onSignOut={onSignOut} readOnly={!online}>
+      <Header board={board} account={account} onSignOut={onSignOut} readOnly={!online} saving={saving}>
         <FilterBar board={board} />
       </Header>
       <main className="mx-auto max-w-[1400px] px-4 py-5 sm:px-6">

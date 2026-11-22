@@ -1,9 +1,6 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { card, column } from './helpers';
 
-test.beforeEach(async ({ page }) => {
-  await page.goto('/');
-});
 
 test('mobile: column tabs show one column at a time', async ({ page }) => {
   await expect(column(page, 'Cần làm')).toBeVisible();

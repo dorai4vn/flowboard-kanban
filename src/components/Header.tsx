@@ -7,9 +7,9 @@ import { BoardSettings } from './BoardSettings';
 import { NewBoardDialog } from './NewBoardDialog';
 import { UserMenu } from './UserMenu';
 
-type Props = { board: Board; children?: ReactNode; account?: AuthUser; onSignOut?: () => void; readOnly?: boolean };
+type Props = { board: Board; children?: ReactNode; account?: AuthUser; onSignOut?: () => void; readOnly?: boolean; saving?: boolean };
 
-export function Header({ board, children, account, onSignOut, readOnly = false }: Props) {
+export function Header({ board, children, account, onSignOut, readOnly = false, saving = false }: Props) {
   const boardOrder = useBoardStore((s) => s.app.boardOrder);
   const allBoards = useBoardStore((s) => s.app.boards);
   const boards = boardOrder.map((id) => allBoards[id]!);
@@ -29,6 +29,14 @@ export function Header({ board, children, account, onSignOut, readOnly = false }
             </svg>
           </span>
           <h1 className="text-lg font-bold tracking-tight">FlowBoard</h1>
+          <span aria-live="polite" className="min-w-[4.5rem] text-xs text-muted">
+            {saving && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" aria-hidden="true" />
+                Đang lưu…
+              </span>
+            )}
+          </span>
         </div>
 
         <div className="relative flex min-w-0 items-center gap-1.5">
