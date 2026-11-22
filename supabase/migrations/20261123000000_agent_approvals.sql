@@ -133,7 +133,7 @@ begin
     raise exception 'target not found' using errcode = 'P0002';
   end if;
 
-  if (select count(*) from public.agent_approvals a where a.user_id = v_uid and a.status = 'pending' and a.expires_at > now()) >= 10 then
+  if (select count(*) from public.agent_approvals a where a.user_id = v_uid and a.status in ('pending', 'approved') and a.expires_at > now()) >= 10 then
     raise exception 'too many pending approvals' using errcode = '53400';
   end if;
   if (select count(*) from public.agent_approvals a where a.user_id = v_uid and a.created_at > now() - interval '1 hour') >= 30 then

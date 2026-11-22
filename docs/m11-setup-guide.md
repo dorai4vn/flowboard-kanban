@@ -34,7 +34,7 @@ từ chối, không có thao tác nào chạy.
 - Hàm SECURITY DEFINER kiểm tra `auth.uid()` tường minh, `search_path` cố định, thu hồi quyền `anon`/`public`.
 - Giới hạn chống lạm dụng nằm trong DB: 30 yêu cầu/10 phút/người, 30 yêu cầu xóa/giờ, tối đa 10 đang chờ,
   run state ≤ 200 000 ký tự; bản ghi đã xử lý bị xóa sau 1 ngày → bảng không phình trên DB dùng chung.
-- Đã chạy trên Supabase Local: pgTAP 114/114, integration 15/15.
+- Đã chạy trên Supabase Local: pgTAP 116/116, integration 15/15.
 
 **Cách áp dụng (khi bạn đồng ý):** Supabase Dashboard → SQL Editor → dán toàn bộ nội dung file migration → Run.
 Hoặc `npx supabase db push` với project đã link (sẽ chỉ đẩy migration chưa có).

@@ -2,7 +2,7 @@
 -- run state retention, stale claims.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(21);
 
 insert into auth.users (id, email, aud, role, instance_id) values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'a@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000');
@@ -61,10 +61,17 @@ update public.agent_approvals set decided_at = now() - interval '3 minutes' wher
 select pg_temp.as_user('aaaaaaaa-0000-4000-8000-000000000001');
 select is(public.agent_claim_approval((select (v->>'id')::uuid from ids where k='s1'), 'delete_task', 'a0000000-0000-4000-8000-0000000000d1')->>'code', 'ok', 'an abandoned claim can be approved again');
 
+-- ---------- claimed-but-unfinished approvals also count toward the 10 open requests ----------
+select lives_ok($$ select public.agent_claim_approval((public.agent_create_approval('delete_task', 'a0000000-0000-4000-8000-0000000000d1', 'S', 'M')->>'id')::uuid, 'delete_task', 'a0000000-0000-4000-8000-0000000000d1') from generate_series(1, 9) $$, 'nine claimed approvals (plus the re-claimed one above)');
+select throws_ok($$ select public.agent_create_approval('delete_task', 'a0000000-0000-4000-8000-0000000000d1', 'S', 'M') $$, '53400', null, 'claimed approvals count toward the open limit');
+reset role;
+update public.agent_approvals set status = 'rejected', run_state = '' where status = 'approved';
+select pg_temp.as_user('aaaaaaaa-0000-4000-8000-000000000001');
+
 -- ---------- creation budget counts every status (create + reject cannot loop forever) ----------
 select lives_ok($$
   select public.agent_reject_approval((public.agent_create_approval('delete_task', 'a0000000-0000-4000-8000-0000000000d1', 'S', 'M')->>'id')::uuid, 'delete_task', 'a0000000-0000-4000-8000-0000000000d1')
-    from generate_series(1, 26) $$, 'create + reject within the hourly budget');
+    from generate_series(1, 17) $$, 'create + reject within the hourly budget');
 select throws_ok($$ select public.agent_create_approval('delete_task', 'a0000000-0000-4000-8000-0000000000d1', 'S', 'M') $$, '53400', null, 'more than 30 approvals per hour refused even if all were rejected');
 
 -- ---------- retention ----------

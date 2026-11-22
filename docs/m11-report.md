@@ -53,7 +53,7 @@ trong `agent_execute_approval` (SECURITY INVOKER, RLS vẫn áp dụng) cùng tr
 | Lớp | Lệnh | Kết quả |
 |---|---|---|
 | Lint + typecheck + unit/component + build | `npm run check` | **216/216 pass**, build OK [Local] |
-| DB RLS + RPC (pgTAP) | `npm run test:db` | **114/114 pass** [Local] |
+| DB RLS + RPC (pgTAP) | `npm run test:db` | **116/116 pass** [Local] |
 | Integration (Supabase Local, 2 user) | `npm run test:integration` | **15/15 pass** [Local] |
 | E2E desktop + mobile + AI | `npm run test:e2e` | **25 pass**, 4 skip (ảnh QC chạy riêng) [Local] |
 | Model thật | `npm run test:agent-live` | **5/5 pass** [Local] |
@@ -64,6 +64,7 @@ trong `agent_execute_approval` (SECURITY INVOKER, RLS vẫn áp dụng) cùng tr
 ## 5. Review bảo mật độc lập
 
 Reviewer độc lập (subagent riêng, chỉ đọc) trên `git diff 7630d87..HEAD`: **0 Critical, 2 Important, 9 Minor**.
+Vòng 2 (kiểm tra bản sửa `d15c809`): I-1, I-2 và các Minor đã xử lý; **không có Critical/Important mới**; 3 Minor mới (N-1..N-3).
 
 | Mục | Vấn đề | Xử lý |
 |---|---|---|
@@ -77,6 +78,9 @@ Reviewer độc lập (subagent riêng, chỉ đọc) trên `git diff 7630d87..H
 | M-7 | Race giới hạn 10 yêu cầu chờ | Đã sửa: advisory lock theo user |
 | M-8 | Run state quá lớn → báo lỗi sai | Đã sửa: trả lời rõ “cuộc trò chuyện quá dài” |
 | M-9 | Thiếu test | Đã bổ sung (pgTAP `agent_hardening.test.sql`, unit “review hardening”, `config.test.ts`) |
+| N-1 (vòng 2) | Bản ghi `approved` không tính vào giới hạn 10 | Đã sửa: tính cả `approved`; pgTAP bổ sung |
+| N-2 (vòng 2) | RPC xóa không có timeout riêng (Postgres treo → Vercel 504) | Chưa sửa — vẫn không xóa sai; ghi nhận rủi ro |
+| N-3 (vòng 2) | Duyệt lại claim sau 2 phút dựa vào `maxDuration: 60` | Chưa sửa — vẫn chỉ xóa 1 lần (token cũ vô hiệu); ghi nhận rủi ro |
 | M-1 | `agent_claim_approval` trả run state cho chính chủ | Giữ nguyên (không leo thang quyền: dữ liệu của chính user, MAC + kiểm tra tham số + claim); sửa comment |
 
 Điểm reviewer xác nhận đạt: khóa OpenAI chỉ ở server, mọi truy cập DB bằng JWT người dùng (RLS), SECURITY
@@ -96,6 +100,8 @@ trên desktop (nay đẩy layout sang trái), viền focus kép ở ô nhập.
 - Model có thể hiểu sai yêu cầu mơ hồ (ví dụ hai việc trùng tên) — đã hướng dẫn model hỏi lại, nhưng các
   thao tác tạo/sửa không cần duyệt; chỉ xóa mới cần.
 - Chi phí OpenAI: giới hạn 30 yêu cầu/10 phút/người, tối đa 8 lượt tool/yêu cầu; chưa có hạn mức theo ngày.
+- Dọn dẹp bản ghi cũ chỉ chạy khi chính người dùng đó dùng lại Trợ lý (chưa có purge toàn cục bằng `pg_cron`).
+- N-2/N-3 ở mục 5.
 - Lịch sử chat chỉ lưu trong bộ nhớ trình duyệt (mất khi tải lại trang) — theo thiết kế.
 - Dữ liệu bị gửi tới OpenAI: tiêu đề/mô tả công việc mà tool trả về trong cuộc trò chuyện.
 
