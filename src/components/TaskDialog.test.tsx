@@ -6,7 +6,7 @@ const column = (name: string) => screen.getByRole('region', { name });
 
 describe('task dialog', () => {
   it('creates a task with priority, deadline and label', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     await user.click(screen.getByRole('button', { name: 'Thêm công việc vào cột Cần làm' }));
     const dialog = screen.getByRole('dialog', { name: 'Công việc mới' });
     expect(within(dialog).getByLabelText('Tiêu đề')).toHaveFocus();
@@ -25,14 +25,14 @@ describe('task dialog', () => {
   });
 
   it('adds the task to the column whose add button was used', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     await user.click(screen.getByRole('button', { name: 'Thêm công việc vào cột Đang làm' }));
     await user.type(screen.getByLabelText('Tiêu đề'), 'Đang viết code{Enter}');
     expect(within(column('Đang làm')).getByText('Đang viết code')).toBeInTheDocument();
   });
 
   it('keeps the dialog open and shows an error for a blank title', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     await user.click(screen.getByRole('button', { name: 'Thêm công việc vào cột Cần làm' }));
     await user.type(screen.getByLabelText('Tiêu đề'), '   ');
     await user.click(screen.getByRole('button', { name: 'Lưu' }));
@@ -41,7 +41,7 @@ describe('task dialog', () => {
   });
 
   it('creates a new label from the dialog and selects it', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     await user.click(screen.getByRole('button', { name: 'Thêm công việc vào cột Cần làm' }));
     await user.type(screen.getByLabelText('Tiêu đề'), 'Đi chợ');
     await user.type(screen.getByLabelText('Tên nhãn mới'), 'Nhà');
@@ -53,7 +53,7 @@ describe('task dialog', () => {
   });
 
   it('edits an existing task', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     await user.click(screen.getByText('Mua quà sinh nhật'));
     const dialog = screen.getByRole('dialog', { name: 'Sửa công việc' });
     const title = within(dialog).getByLabelText('Tiêu đề');
@@ -66,7 +66,7 @@ describe('task dialog', () => {
   });
 
   it('cancel and Escape discard changes', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     await user.click(screen.getByText('Mua quà sinh nhật'));
     await user.type(screen.getByLabelText('Tiêu đề'), ' XYZ');
     await user.keyboard('{Escape}');
@@ -75,7 +75,7 @@ describe('task dialog', () => {
   });
 
   it('deletes a task after confirmation', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     await user.click(screen.getByText('Mua quà sinh nhật'));
     await user.click(screen.getByRole('button', { name: 'Xóa công việc' }));
     const confirm = screen.getByRole('alertdialog', { name: 'Xóa công việc này?' });
@@ -85,7 +85,7 @@ describe('task dialog', () => {
   });
 
   it('opens a card with the keyboard', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     const card = screen.getByText('Mua quà sinh nhật').closest('article')!;
     card.focus();
     await user.keyboard('{Enter}');

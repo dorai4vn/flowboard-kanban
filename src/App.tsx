@@ -16,9 +16,12 @@ export default function App({ today = toLocalDateKey(new Date()) }: { today?: st
   const [editor, setEditor] = useState<EditorState | null>(null);
 
   // Dialogs are portalled to <body>, so the accent also lives on <html>.
+  const accent = board?.accent ?? 'indigo';
   useEffect(() => {
-    document.documentElement.dataset.accent = board.accent;
-  }, [board.accent]);
+    document.documentElement.dataset.accent = accent;
+  }, [accent]);
+
+  if (!board) return null;
 
   return (
     <div data-accent={board.accent} className="board-glow min-h-dvh">
