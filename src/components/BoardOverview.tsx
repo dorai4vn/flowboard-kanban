@@ -14,10 +14,17 @@ export function BoardOverview({ board, today }: { board: Board; today: string })
 
   return (
     <section aria-label="Tổng quan bảng" className="mb-5 flex flex-col gap-4 rounded-2xl border border-line bg-surface/60 px-4 py-4 sm:flex-row sm:items-center sm:gap-8 sm:px-5">
-      <div className="flex items-baseline gap-3 sm:min-w-[132px] sm:flex-col sm:items-start sm:gap-0.5">
-        <span className="text-3xl font-extrabold tabular-nums tracking-tight text-fg">{s.percentDone}%</span>
-        <span className="text-xs font-medium text-muted">đã hoàn thành trên {s.total} công việc</span>
-      </div>
+      {s.total === 0 ? (
+        <div className="flex flex-col gap-0.5 sm:min-w-[132px]">
+          <span className="text-base font-bold text-fg">Chưa có công việc nào</span>
+          <span className="text-xs text-muted">Thêm việc vào cột Cần làm để bắt đầu.</span>
+        </div>
+      ) : (
+        <div className="flex items-baseline gap-3 sm:min-w-[132px] sm:flex-col sm:items-start sm:gap-0.5">
+          <span className="text-3xl font-extrabold tabular-nums tracking-tight text-fg">{s.percentDone}%</span>
+          <span className="text-xs font-medium text-muted">đã hoàn thành trên {s.total} công việc</span>
+        </div>
+      )}
 
       <div className="min-w-0 flex-1">
         <div

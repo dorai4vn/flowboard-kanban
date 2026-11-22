@@ -128,12 +128,7 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
       </div>
       {editor && <TaskDialog key={editor.mode === 'edit' ? editor.id : editor.column} board={board} editor={editor} onClose={() => setEditor(null)} />}
       {creatingBoard && (
-        <NewBoardDialog
-          onClose={() => {
-            setCreatingBoard(false);
-            setView('board');
-          }}
-        />
+        <NewBoardDialog onClose={() => setCreatingBoard(false)} onCreated={() => setView('board')} />
       )}
       {notice && <Toast message={notice} onClose={dismissNotice} />}
     </div>

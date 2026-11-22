@@ -33,7 +33,7 @@ describe('Today view — progress and done group', () => {
     await user.click(screen.getByRole('button', { name: 'Đánh dấu hoàn thành Hoàn thành bài tập buổi 8' }));
     expect(screen.getByText('Đã xong 1/1')).toBeInTheDocument();
     expect(screen.getByText('Bạn đã xong mọi việc đến hạn hôm nay.')).toBeInTheDocument();
-    expect(within(screen.getByRole('list', { name: 'Đã xong hôm nay' })).getByText('Hoàn thành bài tập buổi 8')).toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Đến hạn hôm nay, đã xong' })).getByText('Hoàn thành bài tập buổi 8')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Xem 1 việc quá hạn' }));
     expect(screen.getByRole('heading', { level: 2, name: 'Quá hạn' })).toBeInTheDocument();
   });

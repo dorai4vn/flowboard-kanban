@@ -1,41 +1,8 @@
 import { expect, test } from './fixtures';
 import { card, column, createTask, dragTo, settled } from './helpers';
 
-// Mouse drags must start away from the viewport edges: dnd-kit auto-scrolls when the pointer is within
-// 20% of an edge (correct app behaviour), which would move the drop target mid-drag on a 720px viewport.
-test.use({ viewport: { width: 1280, height: 1000 } });
 
 
-test('create → edit → drag to Hoàn thành → survives reload', async ({ page }) => {
-  await createTask(page, 'Cần làm', 'E2E nộp bài', { priority: 'Khẩn', label: 'Gấp' });
-  const created = card(column(page, 'Cần làm'), 'E2E nộp bài');
-  await expect(created).toContainText('Khẩn');
-  await expect(created).toContainText('Gấp');
-
-  await created.click();
-  const dialog = page.getByRole('dialog', { name: 'Sửa công việc' });
-  await dialog.getByLabel('Tiêu đề').fill('E2E nộp bài (sửa)');
-  await dialog.getByRole('button', { name: 'Lưu' }).click();
-  const edited = card(page, 'E2E nộp bài (sửa)');
-  await expect(edited).toBeVisible();
-
-  await dragTo(page, edited, column(page, 'Hoàn thành'));
-  await expect(card(column(page, 'Hoàn thành'), 'E2E nộp bài (sửa)')).toBeVisible();
-  await expect(card(column(page, 'Cần làm'), 'E2E nộp bài (sửa)')).toHaveCount(0);
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-
-  await settled(page);
-  await page.reload();
-  await expect(card(column(page, 'Hoàn thành'), 'E2E nộp bài (sửa)')).toBeVisible();
-});
-
-test('reorders within a column by dragging', async ({ page }) => {
-  const todo = column(page, 'Cần làm');
-  const titles = () => todo.locator('article > p:first-of-type').allTextContents();
-  expect((await titles())[0]).toBe('Hoàn thành bài tập buổi 8');
-  await dragTo(page, card(todo, 'Mua quà sinh nhật'), card(todo, 'Hoàn thành bài tập buổi 8'));
-  await expect.poll(titles).toEqual(['Mua quà sinh nhật', 'Hoàn thành bài tập buổi 8', 'Đọc tài liệu về AI Agent']);
-});
 
 test('drags with the keyboard (Space, arrow, Space)', async ({ page }) => {
   await card(page, 'Mua quà sinh nhật').focus();
@@ -71,7 +38,7 @@ test('new board with its own accent color persists', async ({ page }) => {
   await page.getByRole('dialog', { name: 'Tạo bảng mới' }).getByLabel('Tên bảng').fill('Đồ án');
   await page.getByRole('button', { name: 'Tạo bảng' }).click();
   await expect(page.getByRole('combobox', { name: 'Chọn bảng' })).toHaveValue(/.+/);
-  await expect(page.getByText('Chưa có công việc')).toHaveCount(3);
+  await expect(page.getByText('Chưa có công việc', { exact: true })).toHaveCount(3);
 
   await page.getByRole('button', { name: 'Tùy chỉnh bảng' }).click();
   await page.getByRole('radio', { name: 'Màu Hồng' }).click();
@@ -94,4 +61,40 @@ test('delete a task with confirmation; stays deleted after reload', async ({ pag
   await page.reload();
   await expect(card(page, 'Mua quà sinh nhật')).toHaveCount(0);
   await expect(page.locator('article')).toHaveCount(4);
+});
+
+// Mouse drags must start away from the viewport edges: dnd-kit auto-scrolls when the pointer is within
+// 20% of an edge (correct app behaviour), which would move the drop target mid-drag on a 720px viewport.
+test.describe('mouse drag', () => {
+  test.use({ viewport: { width: 1280, height: 1000 } });
+
+  test('create → edit → drag to Hoàn thành → survives reload', async ({ page }) => {
+    await createTask(page, 'Cần làm', 'E2E nộp bài', { priority: 'Khẩn', label: 'Gấp' });
+    const created = card(column(page, 'Cần làm'), 'E2E nộp bài');
+    await expect(created).toContainText('Khẩn');
+    await expect(created).toContainText('Gấp');
+  
+    await created.click();
+    const dialog = page.getByRole('dialog', { name: 'Sửa công việc' });
+    await dialog.getByLabel('Tiêu đề').fill('E2E nộp bài (sửa)');
+    await dialog.getByRole('button', { name: 'Lưu' }).click();
+    const edited = card(page, 'E2E nộp bài (sửa)');
+    await expect(edited).toBeVisible();
+  
+    await dragTo(page, edited, column(page, 'Hoàn thành'));
+    await expect(card(column(page, 'Hoàn thành'), 'E2E nộp bài (sửa)')).toBeVisible();
+    await expect(card(column(page, 'Cần làm'), 'E2E nộp bài (sửa)')).toHaveCount(0);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  
+    await settled(page);
+    await page.reload();
+    await expect(card(column(page, 'Hoàn thành'), 'E2E nộp bài (sửa)')).toBeVisible();
+  });
+  test('reorders within a column by dragging', async ({ page }) => {
+    const todo = column(page, 'Cần làm');
+    const titles = () => todo.locator('article > p:first-of-type').allTextContents();
+    expect((await titles())[0]).toBe('Hoàn thành bài tập buổi 8');
+    await dragTo(page, card(todo, 'Mua quà sinh nhật'), card(todo, 'Hoàn thành bài tập buổi 8'));
+    await expect.poll(titles).toEqual(['Mua quà sinh nhật', 'Hoàn thành bài tập buổi 8', 'Đọc tài liệu về AI Agent']);
+  });
 });

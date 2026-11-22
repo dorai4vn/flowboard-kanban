@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { AlarmClock, AlarmClockOff, ArrowLeft, CalendarArrowUp, Check, CircleCheck, PartyPopper } from 'lucide-react';
 import { formatLongDate } from '../domain/dates';
 import type { FocusItem, OverdueBucket } from '../domain/filters';
@@ -31,6 +32,7 @@ function Row({ item, today, readOnly, onOpen, onComplete, onReschedule }: { item
     <li className="group flex items-start gap-3 px-4 py-3.5 transition-colors hover:bg-white/[0.025] sm:items-center">
       <button
         type="button"
+        id={`complete-${item.task.id}`}
         aria-label={`Đánh dấu hoàn thành ${item.task.title}`}
         title="Đánh dấu hoàn thành"
         disabled={readOnly}
@@ -41,7 +43,9 @@ function Row({ item, today, readOnly, onOpen, onComplete, onReschedule }: { item
       </button>
       <div className="min-w-0 flex-1">
         <button type="button" aria-label={`Mở ${item.task.title}`} onClick={() => onOpen(item)} className="block w-full min-w-0 text-left">
-          <h3 className="line-clamp-2 break-words text-sm font-semibold leading-snug text-fg group-hover:text-accent-strong sm:line-clamp-1">{item.task.title}</h3>
+          <span data-task-title className="line-clamp-2 break-words text-sm font-semibold leading-snug text-fg group-hover:text-accent-strong sm:line-clamp-1">
+            {item.task.title}
+          </span>
         </button>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted">
           <BoardChip item={item} />
@@ -88,7 +92,30 @@ const listClass = 'divide-y divide-line overflow-hidden rounded-2xl border borde
 
 /** Today / Overdue: focused lists of unfinished tasks gathered from every board. */
 export function FocusView(props: Props) {
-  const { today, readOnly, onOpen, onComplete, onBackToBoard } = props;
+  const { today, readOnly, onOpen, onBackToBoard } = props;
+  const flat = props.kind === 'today' ? props.pending : props.buckets.flatMap((b) => b.items);
+  const flatIds = flat.map((i) => i.task.id).join(',');
+  const heading = useRef<HTMLHeadingElement>(null);
+  const focusAt = useRef<number | null>(null);
+
+  // A completed/rescheduled row disappears: keep keyboard users in place (next row, or the heading).
+  useEffect(() => {
+    const i = focusAt.current;
+    if (i === null) return;
+    focusAt.current = null;
+    const ids = flatIds ? flatIds.split(',') : [];
+    const next = ids[Math.min(i, ids.length - 1)];
+    if (next) document.getElementById(`complete-${next}`)?.focus();
+    else heading.current?.focus();
+  }, [flatIds]);
+
+  const remember = (item: FocusItem) => {
+    focusAt.current = flat.findIndex((x) => x.task.id === item.task.id);
+  };
+  const onComplete = (item: FocusItem) => {
+    remember(item);
+    props.onComplete(item);
+  };
   const row = { today, readOnly, onOpen, onComplete };
 
   if (props.kind === 'today') {
@@ -98,7 +125,7 @@ export function FocusView(props: Props) {
     return (
       <section className="mx-auto w-full max-w-3xl" aria-labelledby="focus-title">
         <header className="mb-6">
-          <h2 id="focus-title" className="text-sm font-semibold text-today">
+          <h2 id="focus-title" ref={heading} tabIndex={-1} className="text-sm font-semibold text-today outline-none">
             Hôm nay
           </h2>
           <p className="mt-1 text-3xl font-extrabold tracking-tight text-fg sm:text-[2.6rem] sm:leading-[1.1]">{formatLongDate(today)}</p>
@@ -152,7 +179,7 @@ export function FocusView(props: Props) {
         {done.length > 0 && (
           <div className="mt-6">
             <h3 id="done-today" className="mb-2 text-sm font-semibold text-muted">
-              Đã xong hôm nay
+              Đến hạn hôm nay, đã xong
             </h3>
             <ul aria-labelledby="done-today" className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
               {done.map((item) => (
@@ -178,7 +205,7 @@ export function FocusView(props: Props) {
   return (
     <section className="mx-auto w-full max-w-3xl" aria-labelledby="focus-title">
       <header className="mb-6">
-        <h2 id="focus-title" className="text-sm font-semibold text-late">
+        <h2 id="focus-title" ref={heading} tabIndex={-1} className="text-sm font-semibold text-late outline-none">
           Quá hạn
         </h2>
         <p className={`mt-1 text-3xl font-extrabold tracking-tight sm:text-[2.6rem] sm:leading-[1.1] ${count ? 'text-late' : 'text-fg'}`}>
@@ -207,7 +234,15 @@ export function FocusView(props: Props) {
               </h3>
               <ul aria-labelledby={`bucket-${b.id}`} className={listClass}>
                 {b.items.map((item) => (
-                  <Row key={item.task.id} item={item} {...row} onReschedule={onReschedule} />
+                  <Row
+                    key={item.task.id}
+                    item={item}
+                    {...row}
+                    onReschedule={(it) => {
+                      remember(it);
+                      onReschedule(it);
+                    }}
+                  />
                 ))}
               </ul>
             </div>

@@ -35,7 +35,7 @@ test('a task from another board opens for editing from Today', async ({ page }) 
   await page.getByRole('button', { name: 'Bảng mới' }).click();
   await page.getByRole('dialog', { name: 'Tạo bảng mới' }).getByLabel('Tên bảng').fill('Đồ án');
   await page.getByRole('button', { name: 'Tạo bảng' }).click();
-  await expect(page.getByText('Chưa có công việc')).toHaveCount(3);
+  await expect(page.getByText('Chưa có công việc', { exact: true })).toHaveCount(3);
   await nav(page).getByRole('button', { name: /^Hôm nay/ }).click();
   await page.getByRole('button', { name: 'Mở Hoàn thành bài tập buổi 8' }).click();
   const dialog = page.getByRole('dialog', { name: 'Sửa công việc' });

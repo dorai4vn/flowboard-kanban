@@ -31,7 +31,7 @@ describe('Today view', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Hôm nay' })).toBeInTheDocument();
     expect(screen.getByText('Thứ Bảy, 21 tháng 11')).toBeInTheDocument();
     const list = screen.getByRole('list', { name: 'Việc đến hạn hôm nay' });
-    expect(within(list).getAllByRole('listitem').map((li) => li.querySelector('h3')?.textContent)).toEqual(['Hoàn thành bài tập buổi 8']);
+    expect(within(list).getAllByRole('listitem').map((li) => li.querySelector('[data-task-title]')?.textContent)).toEqual(['Hoàn thành bài tập buổi 8']);
     expect(within(list).getByText('Bảng của tôi')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Cần làm' })).not.toBeInTheDocument();
   });

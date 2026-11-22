@@ -3,7 +3,7 @@ import { useBoardStore } from '../store/useBoardStore';
 import { Modal } from './Modal';
 import { buttonGhost, buttonPrimary, inputClass } from './styles';
 
-export function NewBoardDialog({ onClose }: { onClose: () => void }) {
+export function NewBoardDialog({ onClose, onCreated }: { onClose: () => void; onCreated?: () => void }) {
   const createBoard = useBoardStore((s) => s.createBoard);
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -11,8 +11,9 @@ export function NewBoardDialog({ onClose }: { onClose: () => void }) {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const err = createBoard(name);
-    if (err) setError(err);
-    else onClose();
+    if (err) return setError(err);
+    onCreated?.();
+    onClose();
   };
 
   return (

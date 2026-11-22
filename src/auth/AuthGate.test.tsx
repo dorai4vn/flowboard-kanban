@@ -126,6 +126,21 @@ describe('AuthGate', () => {
     expect(screen.queryByText('Viết báo cáo tuần')).not.toBeInTheDocument();
   });
 
+  it('switching accounts while in the Today view shows none of the previous account’s tasks', async () => {
+    const repoA = new FakeRepository(seeded());
+    const repoB = new FakeRepository(seeded((b) => ({ ...b, name: 'Bảng của Bình', tasks: {}, columns: { todo: [], doing: [], done: [] } })));
+    const repo = new PerUserRepository({ 'user-a': repoA, 'user-b': repoB });
+    const auth = new FakeAuth(userA, repo);
+    const { user } = setup(auth, repo);
+    await screen.findByText('Viết báo cáo tuần');
+    await user.click(screen.getByRole('button', { name: /^Hôm nay/ }));
+    expect(screen.getByRole('list', { name: 'Việc đến hạn hôm nay' })).toBeInTheDocument();
+    act(() => auth.emit(userB));
+    expect(await screen.findByRole('combobox', { name: 'Chọn bảng' })).toHaveDisplayValue('Bảng của Bình');
+    expect(screen.queryByText('Hoàn thành bài tập buổi 8')).not.toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Việc đến hạn hôm nay' })).not.toBeInTheDocument();
+  });
+
   it('sign out clears the board immediately and returns to the login screen', async () => {
     const auth = new FakeAuth(userA);
     const { user, store } = setup(auth);
