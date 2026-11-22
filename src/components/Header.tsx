@@ -7,9 +7,9 @@ import { BoardSettings } from './BoardSettings';
 import { NewBoardDialog } from './NewBoardDialog';
 import { UserMenu } from './UserMenu';
 
-type Props = { board: Board; children?: ReactNode; account?: AuthUser; onSignOut?: () => void };
+type Props = { board: Board; children?: ReactNode; account?: AuthUser; onSignOut?: () => void; readOnly?: boolean };
 
-export function Header({ board, children, account, onSignOut }: Props) {
+export function Header({ board, children, account, onSignOut, readOnly = false }: Props) {
   const boardOrder = useBoardStore((s) => s.app.boardOrder);
   const allBoards = useBoardStore((s) => s.app.boards);
   const boards = boardOrder.map((id) => allBoards[id]!);
@@ -51,8 +51,9 @@ export function Header({ board, children, account, onSignOut }: Props) {
             type="button"
             aria-label="Bảng mới"
             title="Bảng mới"
+            disabled={readOnly}
             onClick={() => setCreating(true)}
-            className="rounded-lg border border-line-strong p-2 text-muted transition hover:border-accent/50 hover:text-fg"
+            className="rounded-lg border border-line-strong p-2 text-muted transition hover:border-accent/50 hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus size={16} />
           </button>
@@ -62,12 +63,13 @@ export function Header({ board, children, account, onSignOut }: Props) {
               aria-label="Tùy chỉnh bảng"
               title="Tùy chỉnh bảng"
               aria-expanded={settingsOpen}
+              disabled={readOnly}
               onClick={() => setSettingsOpen((v) => !v)}
-              className="rounded-lg border border-line-strong p-2 text-muted transition hover:border-accent/50 hover:text-fg aria-expanded:border-accent aria-expanded:text-accent"
+              className="rounded-lg border border-line-strong p-2 text-muted transition hover:border-accent/50 hover:text-fg aria-expanded:border-accent aria-expanded:text-accent disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Settings2 size={16} />
             </button>
-            {settingsOpen && <BoardSettings key={board.id} board={board} onClose={() => setSettingsOpen(false)} />}
+            {settingsOpen && !readOnly && <BoardSettings key={board.id} board={board} onClose={() => setSettingsOpen(false)} />}
           </div>
         </div>
 
