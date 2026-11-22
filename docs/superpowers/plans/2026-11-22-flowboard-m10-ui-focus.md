@@ -36,3 +36,25 @@ trạng thái rỗng, hộp thoại.
 
 ### Task 5: Test + E2E + ảnh chụp + push
 Cập nhật test Buổi 8 liên quan “Hôm nay”; E2E Today/Overdue desktop + mobile; chạy check/db/integration/e2e/secrets; push nhánh.
+
+---
+
+## Phần 2 (yêu cầu bổ sung 2026-11-22): chất lượng giao diện + UX
+
+### Task 6: Domain cho dashboard và view (TDD)
+- `boardStats(board, today) → { todo, doing, done, total, percentDone, dueToday, overdue }` (đếm việc chưa xong cho hạn).
+- `todayPlan(state, today) → { pending: FocusItem[]; done: FocusItem[] }` — việc có hạn hôm nay; `done` = đang ở cột Hoàn thành.
+- `overdueBuckets(items) → { id: 'week' | 'days' | 'day'; title; items }[]` — “Trễ hơn 1 tuần” (> 7), “Trễ 2–7 ngày”, “Trễ 1 ngày”, bỏ nhóm rỗng.
+
+### Task 7: Store — `rescheduleTask(boardId, taskId, dueDate)` (TDD)
+Cập nhật hạn chót trên đúng bảng (kể cả khi bảng khác đang mở), qua hàng đợi ghi; chặn offline; task/bảng lạ → lỗi, không ghi.
+
+### Task 8: Giao diện
+- **Tổng quan bảng** (trên các cột): thanh tiến độ 3 đoạn theo cột + chú thích + % hoàn thành + số việc đến hạn hôm nay / quá hạn của bảng.
+- **Hôm nay**: tiêu đề ngày, thanh tiến độ “Đã xong x/y”, danh sách cần làm, nhóm “Đã xong hôm nay”, lối tắt khi còn việc quá hạn.
+- **Quá hạn**: nhóm theo mức trễ, mỗi dòng có “Dời sang hôm nay” và “Đánh dấu hoàn thành”.
+- **Sidebar**: nút “Thêm bảng”, bảng đang mở nổi bật, bộ đếm rõ ràng; mobile tab bar giữ nguyên.
+
+### Task 9: Visual QC + kiểm thử + review + Preview
+Ảnh desktop/mobile cho Bảng, Hôm nay, Quá hạn, hộp thoại tạo/sửa (kể cả tiêu đề rất dài); sửa lỗi; chụp lại.
+Chạy check/db/integration/E2E desktop+mobile; reviewer độc lập; push; tạo Preview qua PR nháp (không merge).
