@@ -26,6 +26,7 @@
     "tests/support",
     "server/**/*.test.ts",
     "vitest.live.config.ts",
-    "tests/live"
+    "tests/live",
+    "vite.agent-dev.ts"
   ]
 }

@@ -167,10 +167,11 @@ export function AssistantPanel({ messages, busy, online, onSend, onDecide, onClo
       </div>
 
       <form onSubmit={submit} className="border-t border-line p-3 pb-[max(env(safe-area-inset-bottom),0.75rem)]">
-        <div className="flex items-end gap-2 rounded-2xl border border-line-strong bg-bg/60 p-1.5 focus-within:border-accent">
+        <div className="flex items-end gap-2 rounded-2xl border border-line-strong bg-bg/60 p-1.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30">
           <textarea
             ref={box}
             aria-label="Tin nhắn cho Trợ lý AI"
+            data-composer=""
             rows={1}
             maxLength={1000}
             disabled={!online}

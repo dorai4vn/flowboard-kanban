@@ -51,6 +51,11 @@ body {
   outline-offset: 2px;
 }
 
+/* The composer frame draws the focus ring for its textarea (focus-within). */
+textarea[data-composer]:focus-visible {
+  outline: none;
+}
+
 .board-glow {
   background:
     radial-gradient(900px 420px at 0% -10%, color-mix(in oklab, var(--accent) 10%, transparent), transparent 65%),

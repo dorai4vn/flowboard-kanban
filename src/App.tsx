@@ -87,7 +87,7 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
   };
 
   return (
-    <div data-accent={board.accent} className="board-glow min-h-dvh md:grid md:grid-cols-[232px_minmax(0,1fr)]">
+    <div data-accent={board.accent} className={`board-glow min-h-dvh md:grid md:grid-cols-[232px_minmax(0,1fr)] ${assistant && assistantOpen ? 'md:pr-[400px]' : ''}`}>
       <Sidebar
         view={view}
         onView={setView}
