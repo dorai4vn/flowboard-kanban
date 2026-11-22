@@ -310,3 +310,29 @@ describe('completeTask (Today / Overdue views)', () => {
     expect(repo.persisted).toHaveLength(0);
   });
 });
+
+describe('rescheduleTask (Overdue view: “Dời sang hôm nay”)', () => {
+  it('changes the deadline on the task’s own board even when another board is open, and persists it', async () => {
+    const { store, repo } = await ready();
+    const first = active(store);
+    const taskId = idOf(store, 'Viết báo cáo tuần');
+    store.getState().createBoard('Khác');
+    expect(store.getState().rescheduleTask(first.id, taskId, '2026-11-22')).toBeNull();
+    expect(store.getState().app.boards[first.id]!.tasks[taskId]!.dueDate).toBe('2026-11-22');
+    expect(active(store).name).toBe('Khác');
+    await store.getState().whenIdle();
+    expect(repo.state.boards[first.id]!.tasks[taskId]!.dueDate).toBe('2026-11-22');
+    expect(repo.persisted.at(-1)?.type).toBe('updateTask');
+  });
+
+  it('refuses offline and for unknown boards or tasks without writing', async () => {
+    const { store, repo } = await ready();
+    const b = active(store);
+    expect(store.getState().rescheduleTask('ghost', 'x', '2026-11-22')).not.toBeNull();
+    expect(store.getState().rescheduleTask(b.id, 'ghost', '2026-11-22')).not.toBeNull();
+    store.getState().setOnline(false);
+    expect(store.getState().rescheduleTask(b.id, idOf(store, 'Viết báo cáo tuần'), '2026-11-22')).toBe(OFFLINE_ERROR);
+    await store.getState().whenIdle();
+    expect(repo.persisted).toHaveLength(0);
+  });
+});
