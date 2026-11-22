@@ -1,11 +1,15 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, Plus, Settings2 } from 'lucide-react';
+import type { AuthUser } from '../auth/authClient';
 import type { Board } from '../domain/types';
 import { useBoardStore } from '../store/useBoardStore';
 import { BoardSettings } from './BoardSettings';
 import { NewBoardDialog } from './NewBoardDialog';
+import { UserMenu } from './UserMenu';
 
-export function Header({ board, children }: { board: Board; children?: ReactNode }) {
+type Props = { board: Board; children?: ReactNode; account?: AuthUser; onSignOut?: () => void; readOnly?: boolean; saving?: boolean };
+
+export function Header({ board, children, account, onSignOut, readOnly = false, saving = false }: Props) {
   const boardOrder = useBoardStore((s) => s.app.boardOrder);
   const allBoards = useBoardStore((s) => s.app.boards);
   const boards = boardOrder.map((id) => allBoards[id]!);
@@ -25,6 +29,14 @@ export function Header({ board, children }: { board: Board; children?: ReactNode
             </svg>
           </span>
           <h1 className="text-lg font-bold tracking-tight">FlowBoard</h1>
+          <span aria-live="polite" className="min-w-[4.5rem] text-xs text-muted">
+            {saving && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" aria-hidden="true" />
+                Đang lưu…
+              </span>
+            )}
+          </span>
         </div>
 
         <div className="relative flex min-w-0 items-center gap-1.5">
@@ -47,8 +59,9 @@ export function Header({ board, children }: { board: Board; children?: ReactNode
             type="button"
             aria-label="Bảng mới"
             title="Bảng mới"
+            disabled={readOnly}
             onClick={() => setCreating(true)}
-            className="rounded-lg border border-line-strong p-2 text-muted transition hover:border-accent/50 hover:text-fg"
+            className="rounded-lg border border-line-strong p-2 text-muted transition hover:border-accent/50 hover:text-fg disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Plus size={16} />
           </button>
@@ -58,16 +71,20 @@ export function Header({ board, children }: { board: Board; children?: ReactNode
               aria-label="Tùy chỉnh bảng"
               title="Tùy chỉnh bảng"
               aria-expanded={settingsOpen}
+              disabled={readOnly}
               onClick={() => setSettingsOpen((v) => !v)}
-              className="rounded-lg border border-line-strong p-2 text-muted transition hover:border-accent/50 hover:text-fg aria-expanded:border-accent aria-expanded:text-accent"
+              className="rounded-lg border border-line-strong p-2 text-muted transition hover:border-accent/50 hover:text-fg aria-expanded:border-accent aria-expanded:text-accent disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Settings2 size={16} />
             </button>
-            {settingsOpen && <BoardSettings key={board.id} board={board} onClose={() => setSettingsOpen(false)} />}
+            {settingsOpen && !readOnly && <BoardSettings key={board.id} board={board} onClose={() => setSettingsOpen(false)} />}
           </div>
         </div>
 
-        <div className="flex w-full flex-1 items-center gap-2 md:w-auto md:justify-end">{children}</div>
+        <div className="flex w-full flex-1 items-center gap-2 md:w-auto md:justify-end">
+          {children}
+          {account && onSignOut && <UserMenu account={account} onSignOut={onSignOut} />}
+        </div>
       </div>
       {creating && <NewBoardDialog onClose={() => setCreating(false)} />}
     </header>

@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowRightLeft } from 'lucide-react';
 import { COLUMN_IDS, COLUMN_TITLES, type ColumnId } from '../domain/types';
 
-type Props = { taskTitle: string; column: ColumnId; onMove: (to: ColumnId) => void };
+type Props = { taskTitle: string; column: ColumnId; onMove: (to: ColumnId) => void; disabled?: boolean };
 
 /** Small menu to move a task to another column — the non-drag path, essential on phones. */
-export function MoveMenu({ taskTitle, column, onMove }: Props) {
+export function MoveMenu({ taskTitle, column, onMove, disabled = false }: Props) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -31,8 +31,9 @@ export function MoveMenu({ taskTitle, column, onMove }: Props) {
         aria-label={`Chuyển công việc ${taskTitle}`}
         aria-haspopup="menu"
         aria-expanded={open}
+        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
-        className="rounded-md p-1.5 text-faint opacity-100 transition hover:bg-white/5 hover:text-fg focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100 aria-expanded:opacity-100"
+        className="rounded-md p-1.5 text-faint opacity-100 transition hover:bg-white/5 hover:text-fg focus-visible:opacity-100 md:opacity-0 md:group-hover:opacity-100 aria-expanded:opacity-100 disabled:cursor-not-allowed disabled:opacity-30"
       >
         <ArrowRightLeft size={14} />
       </button>

@@ -28,6 +28,7 @@ type Props = {
   today: string;
   onAdd: (column: ColumnId) => void;
   onOpen: (id: string) => void;
+  readOnly?: boolean;
 };
 
 type DropData = { type: 'task' | 'column'; column: ColumnId };
@@ -49,7 +50,7 @@ const columnKeyboardCoordinates: KeyboardCoordinateGetter = (event, args) => {
   return { x: rect.left + 12, y: rect.top + 48 };
 };
 
-export function BoardView({ board, filter, today, onAdd, onOpen }: Props) {
+export function BoardView({ board, filter, today, onAdd, onOpen, readOnly = false }: Props) {
   const moveTask = useBoardStore((s) => s.moveTask);
   const [tab, setTab] = useState<ColumnId>('todo');
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -173,6 +174,7 @@ export function BoardView({ board, filter, today, onAdd, onOpen }: Props) {
               onAdd={onAdd}
               onOpen={open}
               onMove={moveToEnd}
+              readOnly={readOnly}
             />
           ))}
         </div>

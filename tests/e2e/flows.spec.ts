@@ -1,10 +1,6 @@
-import { expect, test } from '@playwright/test';
-import { card, column, createTask, dragTo } from './helpers';
+import { expect, test } from './fixtures';
+import { card, column, createTask, dragTo, settled } from './helpers';
 
-test.beforeEach(async ({ page }) => {
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'FlowBoard', level: 1 })).toBeVisible();
-});
 
 test('create → edit → drag to Hoàn thành → survives reload', async ({ page }) => {
   await createTask(page, 'Cần làm', 'E2E nộp bài', { priority: 'Khẩn', label: 'Gấp' });
@@ -24,6 +20,7 @@ test('create → edit → drag to Hoàn thành → survives reload', async ({ pa
   await expect(card(column(page, 'Cần làm'), 'E2E nộp bài (sửa)')).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
+  await settled(page);
   await page.reload();
   await expect(card(column(page, 'Hoàn thành'), 'E2E nộp bài (sửa)')).toBeVisible();
 });
@@ -40,7 +37,10 @@ test('drags with the keyboard (Space, arrow, Space)', async ({ page }) => {
   await card(page, 'Mua quà sinh nhật').focus();
   const live = page.locator('[id^="DndLiveRegion"]');
   await page.keyboard.press('Space');
-  await expect(live).toContainText('Mua quà sinh nhật');
+  await expect(live).toHaveText('Công việc Mua quà sinh nhật đang ở cột Cần làm.');
+  // dnd-kit's KeyboardSensor attaches its keydown listener in a setTimeout(0) after the pick-up, and Chromium
+  // handles input before pending timers. A 0ms timer queued now runs after that one (FIFO), so the listener exists.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
   await page.keyboard.press('ArrowRight');
   await expect(live).toHaveText('Công việc Mua quà sinh nhật đang ở cột Đang làm.');
   await page.keyboard.press('Space');
@@ -81,6 +81,7 @@ test('new board with its own accent color persists', async ({ page }) => {
   await page.getByRole('radio', { name: 'Màu Hồng' }).click();
   await expect(page.locator('html')).toHaveAttribute('data-accent', 'rose');
 
+  await settled(page);
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-accent', 'rose');
   await expect(page.getByRole('combobox', { name: 'Chọn bảng' }).locator('option:checked')).toHaveText('Đồ án');
@@ -93,16 +94,8 @@ test('delete a task with confirmation; stays deleted after reload', async ({ pag
   await page.getByRole('button', { name: 'Xóa công việc' }).click();
   await page.getByRole('alertdialog', { name: 'Xóa công việc này?' }).getByRole('button', { name: 'Xóa' }).click();
   await expect(card(page, 'Mua quà sinh nhật')).toHaveCount(0);
+  await settled(page);
   await page.reload();
   await expect(card(page, 'Mua quà sinh nhật')).toHaveCount(0);
   await expect(page.locator('article')).toHaveCount(4);
-});
-
-test('corrupted saved data is backed up and the app still opens', async ({ page }) => {
-  await page.evaluate(() => localStorage.setItem('flowboard:state', '{bad'));
-  await page.reload();
-  await expect(page.getByRole('alert')).toContainText('Dữ liệu cũ bị lỗi, đã sao lưu và tạo bảng mới.');
-  await expect(page.locator('article')).toHaveCount(5);
-  const backups = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith('flowboard:backup-')));
-  expect(backups).toHaveLength(1);
 });

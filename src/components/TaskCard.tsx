@@ -51,14 +51,15 @@ export function TaskCardBody({ task, column, labels, today }: BodyProps) {
   );
 }
 
-type Props = BodyProps & { onOpen: (id: string) => void; onMove: (id: string, to: ColumnId) => void };
+type Props = BodyProps & { onOpen: (id: string) => void; onMove: (id: string, to: ColumnId) => void; readOnly?: boolean };
 
 export const cardClass = 'relative rounded-xl border border-line bg-card p-3 pl-4 shadow-sm shadow-black/20';
 
-export function TaskCard({ task, column, labels, today, onOpen, onMove }: Props) {
+export function TaskCard({ task, column, labels, today, onOpen, onMove, readOnly = false }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: task.id,
     data: { type: 'task', column },
+    disabled: readOnly,
     attributes: { roleDescription: 'công việc có thể kéo thả' },
   });
 
@@ -78,11 +79,11 @@ export function TaskCard({ task, column, labels, today, onOpen, onMove }: Props)
           }
           listeners?.onKeyDown?.(e);
         }}
-        className={`${cardClass} cursor-grab touch-manipulation select-none transition-[background,border,opacity] hover:border-line-strong hover:bg-card-hover active:cursor-grabbing ${isDragging ? 'opacity-30' : ''}`}
+        className={`${cardClass} ${readOnly ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'} touch-manipulation select-none transition-[background,border,opacity] hover:border-line-strong hover:bg-card-hover ${isDragging ? 'opacity-30' : ''}`}
       >
         <TaskCardBody task={task} column={column} labels={labels} today={today} />
       </article>
-      <MoveMenu taskTitle={task.title} column={column} onMove={(to) => onMove(task.id, to)} />
+      <MoveMenu taskTitle={task.title} column={column} disabled={readOnly} onMove={(to) => onMove(task.id, to)} />
     </div>
   );
 }

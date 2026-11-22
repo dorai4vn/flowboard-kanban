@@ -25,3 +25,8 @@ export async function createTask(page: Page, col: 'Cần làm' | 'Đang làm' | 
   await dialog.getByRole('button', { name: 'Lưu' }).click();
   await expect(dialog).toBeHidden();
 }
+
+/** Wait until every optimistic change has been saved to Supabase. */
+export async function settled(page: Page) {
+  await expect(page.getByText('Đang lưu…')).toHaveCount(0);
+}

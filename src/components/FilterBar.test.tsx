@@ -7,20 +7,20 @@ const visible = () => SEED.filter((t) => screen.queryByText(t));
 
 describe('search and filters', () => {
   it('searches without diacritics', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     await user.type(screen.getByRole('searchbox', { name: 'Tìm kiếm công việc' }), 'bao cao');
     expect(visible()).toEqual(['Viết báo cáo tuần']);
     expect(screen.getAllByText('Không tìm thấy công việc phù hợp')).toHaveLength(2);
   });
 
   it('"/" focuses the search box', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     await user.keyboard('/');
     expect(screen.getByRole('searchbox', { name: 'Tìm kiếm công việc' })).toHaveFocus();
   });
 
   it('filters by priority, label and deadline, then clears', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     await user.click(screen.getByRole('button', { name: /^Lọc/ }));
     const panel = screen.getByRole('group', { name: 'Bộ lọc' });
     await user.click(within(panel).getByRole('checkbox', { name: 'Khẩn' }));
@@ -40,7 +40,7 @@ describe('search and filters', () => {
   });
 
   it('today mode shows due, overdue and completed-today tasks with a summary', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     const toggle = screen.getByRole('button', { name: 'Hôm nay' });
     expect(toggle).toHaveAttribute('aria-pressed', 'false');
     await user.click(toggle);
@@ -54,7 +54,7 @@ describe('search and filters', () => {
 
 describe('moving tasks without dragging', () => {
   it('moves a task to another column from its menu', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     await user.click(screen.getByRole('button', { name: 'Chuyển công việc Mua quà sinh nhật' }));
     await user.click(screen.getByRole('menuitem', { name: 'Chuyển sang Đang làm' }));
     expect(within(screen.getByRole('region', { name: 'Đang làm' })).getByText('Mua quà sinh nhật')).toBeInTheDocument();
@@ -63,7 +63,7 @@ describe('moving tasks without dragging', () => {
   });
 
   it('offers only the other two columns', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     await user.click(screen.getByRole('button', { name: 'Chuyển công việc Viết báo cáo tuần' }));
     expect(screen.getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Chuyển sang Cần làm', 'Chuyển sang Hoàn thành']);
   });
@@ -71,7 +71,7 @@ describe('moving tasks without dragging', () => {
 
 describe('mobile column tabs', () => {
   it('has a tab per column with counts and selects one', async () => {
-    const { user } = renderApp();
+    const { user } = await renderApp();
     const tabs = within(screen.getByRole('tablist', { name: 'Cột' })).getAllByRole('tab');
     expect(tabs.map((t) => t.textContent)).toEqual(['Cần làm3', 'Đang làm1', 'Hoàn thành1']);
     expect(tabs[0]).toHaveAttribute('aria-selected', 'true');

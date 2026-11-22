@@ -6,3 +6,6 @@ playwright-report
 *.log
 .env*
 .vercel
+!.env.example
+supabase/.temp
+supabase/.branches
