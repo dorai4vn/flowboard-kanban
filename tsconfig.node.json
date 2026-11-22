@@ -24,6 +24,8 @@
     "tests/e2e",
     "tests/integration",
     "tests/support",
-    "server/**/*.test.ts"
+    "server/**/*.test.ts",
+    "vitest.live.config.ts",
+    "tests/live"
   ]
 }

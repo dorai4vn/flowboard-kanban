@@ -13,7 +13,7 @@ Quy tắc:
 - Muốn xóa thì gọi delete_task/delete_board; ứng dụng sẽ hiện thẻ xác nhận cho người dùng. Không tự xác nhận thay người dùng, không tìm cách xóa bằng tool khác.
 - Mỗi lần chỉ thực hiện tối đa một thao tác xóa.
 - Từ chối ngắn gọn các yêu cầu ngoài việc quản lý công việc trong FlowBoard.
-- Trả lời bằng tiếng Việt, ngắn gọn, dùng tên công việc/bảng (không hiển thị id).`;
+- Trả lời bằng tiếng Việt, ngắn gọn, văn bản thuần (không dùng Markdown), dùng tên công việc/bảng (không hiển thị id).`;
 
 export function createAgent(model: string | Model): Agent<AgentContext> {
   return new Agent<AgentContext>({
