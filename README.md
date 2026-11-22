@@ -8,7 +8,7 @@ hạn chót, độ ưu tiên, nhãn màu, tìm kiếm/lọc, chế độ tập t
 > Bài tập buổi 8 khóa học AI Agent, xây dựng theo phương pháp **Agentic Engineering** với plugin Superpowers:
 > Brainstorm → Spec → Implementation Plan → Code theo plan (TDD) → Review → Bàn giao có bằng chứng.
 
-![FlowBoard trên desktop](docs/screenshots/desktop-board.png)
+![FlowBoard trên desktop](docs/screenshots/m10/desktop-board.png)
 
 ## Tính năng
 
@@ -18,7 +18,8 @@ hạn chót, độ ưu tiên, nhãn màu, tìm kiếm/lọc, chế độ tập t
 - Hạn chót (tô đỏ khi quá hạn, vàng khi đến hạn hôm nay), độ ưu tiên (Thấp / Trung bình / Cao / Khẩn), nhãn màu và tạo nhãn mới.
 - Tìm kiếm không phân biệt dấu (“bao cao” tìm được “Báo cáo”), phím tắt `/`.
 - Lọc theo ưu tiên, nhãn, hạn chót (quá hạn, hôm nay, 7 ngày tới, không có hạn).
-- Chế độ **Hôm nay**: việc đến hạn/quá hạn + việc đã xong hôm nay, kèm thanh tiến độ.
+- **Buổi 10:** chế độ xem **Hôm nay** và **Quá hạn** gom việc từ mọi bảng (bộ đếm trên thanh điều hướng, đánh dấu hoàn thành một chạm, nhãn “Trễ N ngày”).
+- Giao diện mới: sidebar + thanh điều hướng dưới trên mobile, font Be Vietnam Pro, badge ưu tiên/hạn chót rõ ràng.
 - Nhiều bảng, mỗi bảng một màu nhấn (Indigo, Tím, Xanh dương, Ngọc lục bảo, Hổ phách, Hồng).
 - Đăng nhập Google (Supabase Auth, PKCE); đăng xuất/đổi tài khoản xóa ngay dữ liệu đang hiển thị.
 - Lưu lạc quan: thao tác hiện ngay, ghi lên server lần lượt; lỗi thì hoàn tác và báo “Không lưu được thay đổi, đã hoàn tác.”
@@ -85,3 +86,5 @@ docs/            Spec, Plan, báo cáo kiểm thử, báo cáo review, ảnh ch�
 - Buổi 9 — Hướng dẫn cài đặt: [docs/m9-setup-guide.md](docs/m9-setup-guide.md)
 - Buổi 9 — Báo cáo kiểm thử: [docs/m9-test-report.md](docs/m9-test-report.md)
 - Buổi 9 — Báo cáo review: [docs/m9-review-report.md](docs/m9-review-report.md)
+- Buổi 10 — Spec/Plan: [docs/superpowers/specs/2026-11-22-flowboard-m10-ui-focus-design.md](docs/superpowers/specs/2026-11-22-flowboard-m10-ui-focus-design.md), [docs/superpowers/plans/2026-11-22-flowboard-m10-ui-focus.md](docs/superpowers/plans/2026-11-22-flowboard-m10-ui-focus.md)
+- Buổi 10 — Báo cáo: [docs/m10-report.md](docs/m10-report.md)

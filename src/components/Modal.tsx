@@ -65,10 +65,10 @@ export function Modal({ title, onClose, children, role = 'dialog', size = 'md' }
         role={role}
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`relative max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border border-line-strong bg-surface p-5 shadow-2xl shadow-black/50 sm:rounded-2xl ${size === 'sm' ? 'sm:max-w-sm' : 'sm:max-w-lg'}`}
+        className={`relative max-h-[92dvh] w-full overflow-y-auto rounded-t-[20px] border border-line-strong bg-surface p-5 shadow-2xl shadow-black/60 sm:rounded-[20px] sm:p-6 ${size === 'sm' ? 'sm:max-w-sm' : 'sm:max-w-lg'}`}
       >
         <div className="mb-4 flex items-center justify-between gap-4">
-          <h2 id={titleId} className="text-base font-semibold text-fg">
+          <h2 id={titleId} className="text-lg font-bold tracking-tight text-fg">
             {title}
           </h2>
           <button type="button" onClick={onClose} aria-label="Đóng" className="rounded-md p-1 text-muted transition hover:bg-white/5 hover:text-fg">

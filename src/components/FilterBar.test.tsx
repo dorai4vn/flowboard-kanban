@@ -38,18 +38,6 @@ describe('search and filters', () => {
     expect(visible()).toEqual(['Viết báo cáo tuần']);
     expect(screen.getByRole('button', { name: 'Lọc (1)' })).toBeInTheDocument();
   });
-
-  it('today mode shows due, overdue and completed-today tasks with a summary', async () => {
-    const { user } = await renderApp();
-    const toggle = screen.getByRole('button', { name: 'Hôm nay' });
-    expect(toggle).toHaveAttribute('aria-pressed', 'false');
-    await user.click(toggle);
-    expect(toggle).toHaveAttribute('aria-pressed', 'true');
-    expect(visible()).toEqual(['Hoàn thành bài tập buổi 8', 'Viết báo cáo tuần', 'Thiết lập dự án FlowBoard']);
-    expect(screen.getByText('Hôm nay: 2 việc cần làm · 1 quá hạn · 1 đã xong')).toBeInTheDocument();
-    await user.click(toggle);
-    expect(visible()).toEqual(SEED);
-  });
 });
 
 describe('moving tasks without dragging', () => {

@@ -1,6 +1,6 @@
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Plus } from 'lucide-react';
+import { CircleCheck, CircleDashed, CircleDot, Plus, SearchX } from 'lucide-react';
 import { COLUMN_TITLES, type ColumnId, type Label, type Task } from '../domain/types';
 import { TaskCard } from './TaskCard';
 
@@ -18,10 +18,12 @@ type Props = {
   readOnly?: boolean;
 };
 
-const DOT: Record<ColumnId, string> = { todo: 'bg-slate-400', doing: 'bg-accent', done: 'bg-emerald-400' };
+const ICON = { todo: CircleDashed, doing: CircleDot, done: CircleCheck } as const;
+const ICON_TONE: Record<ColumnId, string> = { todo: 'text-muted', doing: 'text-accent', done: 'text-done' };
 
 export function Column({ column, tasks, totalCount, labels, today, highlighted, hiddenOnMobile, onAdd, onOpen, onMove, readOnly = false }: Props) {
   const title = COLUMN_TITLES[column];
+  const Icon = ICON[column];
   const { setNodeRef } = useDroppable({ id: `column:${column}`, data: { type: 'column', column } });
 
   return (
@@ -29,15 +31,15 @@ export function Column({ column, tasks, totalCount, labels, today, highlighted, 
       ref={setNodeRef}
       aria-label={title}
       id={`panel-${column}`}
-      className={`min-h-[240px] flex-col rounded-2xl border bg-surface/70 p-3 transition-colors ${highlighted ? 'border-accent/60 bg-accent-soft' : 'border-line'} ${hiddenOnMobile ? 'hidden md:flex' : 'flex'}`}
+      className={`min-h-[260px] flex-col rounded-2xl border p-2.5 transition-colors ${highlighted ? 'border-accent/60 bg-accent-soft' : 'border-line bg-surface/80'} ${hiddenOnMobile ? 'hidden md:flex' : 'flex'}`}
     >
-      <div className="mb-3 flex items-center gap-2 px-1">
-        <span className={`h-2 w-2 rounded-full ${DOT[column]}`} aria-hidden="true" />
-        <h2 className="text-sm font-semibold text-fg">
+      <div className="mb-2.5 flex items-center gap-2 px-1.5 pt-1">
+        <Icon size={16} strokeWidth={2.25} className={ICON_TONE[column]} aria-hidden="true" />
+        <h2 className="text-[13px] font-bold tracking-tight text-fg">
           {title}
           <span className="sr-only"> ({tasks.length})</span>
         </h2>
-        <span className="rounded-full bg-white/5 px-2 py-0.5 text-xs font-medium tabular-nums text-muted" aria-hidden="true">
+        <span className="ml-auto rounded-md bg-white/[0.04] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-muted" aria-hidden="true">
           {tasks.length}
         </span>
       </div>
@@ -48,9 +50,11 @@ export function Column({ column, tasks, totalCount, labels, today, highlighted, 
             <TaskCard key={t.id} task={t} column={column} labels={labels} today={today} onOpen={onOpen} onMove={onMove} readOnly={readOnly} />
           ))}
           {tasks.length === 0 && (
-            <p className="rounded-xl border border-dashed border-line-strong px-3 py-6 text-center text-xs text-faint">
-              {totalCount === 0 ? 'Chưa có công việc' : 'Không tìm thấy công việc phù hợp'}
-            </p>
+            <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-line-strong px-3 py-7 text-center">
+              {totalCount === 0 ? <Icon size={20} className="text-faint" aria-hidden="true" /> : <SearchX size={20} className="text-faint" aria-hidden="true" />}
+              <p className="text-xs font-medium text-muted">{totalCount === 0 ? 'Chưa có công việc' : 'Không tìm thấy công việc phù hợp'}</p>
+              {totalCount === 0 && !readOnly && <p className="text-[11px] text-faint">Bấm “Thêm công việc” để bắt đầu.</p>}
+            </div>
           )}
         </div>
       </SortableContext>
@@ -60,7 +64,7 @@ export function Column({ column, tasks, totalCount, labels, today, highlighted, 
         onClick={() => onAdd(column)}
         disabled={readOnly}
         aria-label={`Thêm công việc vào cột ${title}`}
-        className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-sm font-medium text-muted transition hover:bg-white/5 hover:text-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+        className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-[13px] font-medium text-muted transition hover:bg-white/5 hover:text-fg disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
       >
         <Plus size={16} aria-hidden="true" /> Thêm công việc
       </button>

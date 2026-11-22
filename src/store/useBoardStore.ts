@@ -39,6 +39,10 @@ export type BoardStoreState = {
   updateTask: (id: string, patch: Partial<TaskInput>) => string | null;
   deleteTask: (id: string) => void;
   moveTask: (id: string, to: ColumnId, toIndex: number) => void;
+  /** Mark a task done on the board that holds it (Today / Overdue views work across boards). */
+  completeTask: (boardId: string, taskId: string) => void;
+  /** Change a task's deadline on the board that holds it. Returns an error message or null. */
+  rescheduleTask: (boardId: string, taskId: string, dueDate: string | null) => string | null;
   setFilter: (patch: Partial<TaskFilter>) => void;
   resetFilter: () => void;
   dismissNotice: () => void;
@@ -297,6 +301,22 @@ export function createBoardStore({ repo, now = () => new Date(), prefs = null, i
         if (blocked() || !b) return;
         const m = planMove(b, id, to, toIndex, iso());
         if (m) commit(m);
+      },
+      completeTask: (boardId, taskId) => {
+        const b = get().app.boards[boardId];
+        if (blocked() || !b?.tasks[taskId] || b.columns.done.includes(taskId)) return;
+        const m = planMove(b, taskId, 'done', b.columns.done.length, iso());
+        if (m) commit(m);
+      },
+      rescheduleTask: (boardId, taskId, dueDate) => {
+        const err = blocked();
+        if (err) return err;
+        const b = get().app.boards[boardId];
+        if (!b) return NOT_READY_ERROR;
+        const r = tasks.updateTask(b, taskId, { dueDate }, iso());
+        if (!r.ok) return r.error;
+        commit({ type: 'updateTask', boardId, task: r.value.tasks[taskId]! });
+        return null;
       },
       setFilter: (patch) => set({ filter: { ...get().filter, ...patch } }),
       resetFilter: () => set({ filter: EMPTY_FILTER }),
