@@ -37,8 +37,10 @@ test('drags with the keyboard (Space, arrow, Space)', async ({ page }) => {
   await card(page, 'Mua quà sinh nhật').focus();
   const live = page.locator('[id^="DndLiveRegion"]');
   await page.keyboard.press('Space');
-  // wait until dnd-kit has measured the columns (it then announces the current column)
   await expect(live).toHaveText('Công việc Mua quà sinh nhật đang ở cột Cần làm.');
+  // dnd-kit's KeyboardSensor attaches its keydown listener in a setTimeout(0) after the pick-up, and Chromium
+  // handles input before pending timers. A 0ms timer queued now runs after that one (FIFO), so the listener exists.
+  await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
   await page.keyboard.press('ArrowRight');
   await expect(live).toHaveText('Công việc Mua quà sinh nhật đang ở cột Đang làm.');
   await page.keyboard.press('Space');

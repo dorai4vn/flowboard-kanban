@@ -9,12 +9,12 @@
 
 | Tầng | Lệnh | Kết quả |
 |---|---|---|
-| Lint + typecheck + unit/component + build | `npm run check` | **PASS — 118/118** (17 file) |
+| Lint + typecheck + unit/component + build | `npm run check` | **PASS — 123/123** (19 file) |
 | DB / RLS / RPC (pgTAP) | `npm run test:db` | **PASS — 58/58** (4 file) |
 | Integration (supabase-js thật, 2 user local) | `npm run test:integration` | **PASS — 8/8** |
-| E2E (Playwright, desktop + mobile, Supabase Local) | `npm run test:e2e` | **PASS — 16/16** (chạy 3 lần, không flaky) |
+| E2E (Playwright, desktop + mobile, Supabase Local) | `npm run test:e2e` | **PASS — 16/16** (2 lượt cuối; xem mục 8 về test từng chập chờn) |
 | Quét secret (file đã track + `dist/`) | `npm run check:secrets` | **PASS** — đã chứng minh bắt được secret key và service_role JWT thật của local khi cố ý đặt vào `dist/` |
-| Kiểm thử thủ công 2 tài khoản Google thật | checklist trong `docs/m9-setup-guide.md` | **CHƯA CHẠY** — cần chủ dự án (xem mục 6) |
+| Kiểm thử thủ công 2 tài khoản Google thật (Vercel Preview + Supabase Cloud) | do chủ dự án thực hiện | **6 mục chủ dự án xác nhận PASS; các bước khác chưa có kết quả** (mục 6) |
 
 ## 1. DB / RLS (pgTAP — `supabase/tests/`)
 
@@ -66,9 +66,40 @@ Mỗi test dùng một tài khoản **mới** trên Supabase Local; phiên đư�
 - RPC `security invoker` + `search_path = ''`, không SQL động.
 - Integration/E2E từ chối chạy nếu URL không phải local.
 
-## 6. Chưa kiểm thử / giới hạn
+## 6. Nghiệm thu thủ công (chủ dự án, Vercel Preview + Supabase Cloud + Google OAuth thật)
 
-- **Google OAuth thật và checklist 2 tài khoản Google**: cần project Supabase + OAuth client của chủ dự án
-  (`docs/m9-setup-guide.md` mục 7). Luồng đổi code PKCE thật với Google chưa chạy trong phiên cloud.
-- Chưa deploy (đúng yêu cầu Buổi 9); production Vercel vẫn là bản Buổi 8.
+Kết quả do chủ dự án báo lại; Claude không truy cập được Vercel/Supabase Cloud nên chỉ ghi nhận, không tự kiểm.
+
+| # | Bước | Kết quả |
+|---|---|---|
+| M1 | Tài khoản Google A đăng nhập | **PASS** |
+| M2 | Tài khoản Google B đăng nhập | **PASS** |
+| M3 | A tạo bảng và công việc | **PASS** |
+| M4 | B không nhìn thấy dữ liệu của A | **PASS** |
+| M5 | B tạo dữ liệu riêng | **PASS** |
+| M6 | A đăng nhập lại không thấy dữ liệu của B | **PASS** |
+
+Các bước trong checklist `docs/m9-setup-guide.md` §7 **chưa được báo kết quả** (không đánh dấu PASS):
+màn hình đăng nhập khi chưa đăng nhập (#1); URL không còn `?code=` và bảng mẫu xuất hiện (#2, phần chi tiết);
+tải lại 2 lần vẫn đúng một bảng mẫu (#3); kéo thả, đổi màu, dữ liệu còn sau khi tải lại (#4, phần còn lại);
+kiểm tra `user_id` trong Table Editor (#6); đăng xuất xóa bảng ngay (#7); đổi tài khoản trên cùng trình duyệt (#8);
+offline chỉ đọc (#9); hủy đăng nhập ở trang Google (#10); dữ liệu localStorage Buổi 8 còn nguyên (#11).
+Các hành vi này đã có kiểm thử tự động trên Supabase Local (mục 3–4) nhưng chưa được xác nhận trên Cloud.
+
+## 7. Chưa kiểm thử / giới hạn
+
+- Các bước thủ công liệt kê ở mục 6 chưa có kết quả trên môi trường Cloud.
+- **Production chưa được kiểm**: biến môi trường Production trên Vercel, Site URL/Redirect URLs của Supabase cho
+  domain Production và trạng thái OAuth consent của Google chưa được xác nhận (Claude không có quyền xem).
+- Chưa deploy Production (chờ phê duyệt); production Vercel vẫn là bản Buổi 8 từ `main`.
 - Đồng bộ nhiều tab/realtime nằm ngoài phạm vi.
+
+## 8. Lần chạy kiểm thử cuối (trước khi mở PR)
+
+- Môi trường: `npm ci` sạch, Supabase Local reset từ migration.
+- `npm run check` 123/123 · `npm run test:db` 58/58 · `npm run test:integration` 8/8 ·
+  `npm run test:e2e` 16/16 (hai lượt liên tiếp) · `check:secrets` OK · `npm audit` 0 lỗ hổng.
+- Test E2E “kéo bằng bàn phím” từng chập chờn (3/12 lượt lỗi). Nguyên nhân gốc (đã đo bằng log tạm):
+  `KeyboardSensor` của dnd-kit gắn bộ nghe phím trong `setTimeout(0)` sau khi nhấc thẻ, Chromium xử lý phím
+  trước timer nên phím → tới quá sớm. Đây là lỗi đồng bộ của test, không phải của app. Test giờ chờ hết timer đó;
+  chạy lặp 25/25 PASS.
