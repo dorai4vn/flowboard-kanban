@@ -1,4 +1,4 @@
-// Fails if a privileged Supabase key or a Google OAuth client secret VALUE is in tracked files or in dist/.
+// Fails if a privileged Supabase key, an OpenAI key, the agent state secret or a Google OAuth client secret VALUE is in tracked files or in dist/.
 // Public values (publishable key, anon JWT) are allowed. Matches are reported by file:line only, never printed.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -8,6 +8,9 @@ const SECRET_PATTERNS = [
   /sb_secret_[A-Za-z0-9_-]{10,}/,
   /GOCSPX-[A-Za-z0-9_-]{10,}/,
   /SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET\s*=\s*\S+/,
+  // OpenAI API keys (sk-..., sk-proj-...) and any assigned OPENAI_API_KEY / AGENT_STATE_SECRET value.
+  /\bsk-(proj-|svcacct-|admin-)?[A-Za-z0-9_-]{20,}/,
+  /\b(OPENAI_API_KEY|AGENT_STATE_SECRET)\s*=\s*[^\s#]+/,
 ];
 const JWT = /eyJ[A-Za-z0-9_-]{8,}\.(eyJ[A-Za-z0-9_-]{8,})\.[A-Za-z0-9_-]{8,}/g;
 
