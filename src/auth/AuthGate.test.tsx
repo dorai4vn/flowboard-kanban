@@ -59,6 +59,9 @@ class FakeAuth implements AuthClient {
   signInWithGoogle() {
     return this.signIn();
   }
+  async getAccessToken() {
+    return this.user ? `token-${this.user.id}` : null;
+  }
   async signOut() {
     this.signOutCalls++;
     this.emit(null);

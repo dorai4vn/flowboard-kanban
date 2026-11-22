@@ -53,6 +53,10 @@ export function createSupabaseAuth(client: FlowboardClient): AuthClient {
       });
       return error ? LOGIN_ERROR : null;
     },
+    async getAccessToken() {
+      const { data } = await client.auth.getSession();
+      return data.session?.access_token ?? null;
+    },
     async signOut() {
       // Sign out this browser only; the local session is removed even if the network call fails.
       await client.auth.signOut({ scope: 'local' });
