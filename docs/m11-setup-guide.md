@@ -11,7 +11,7 @@ Vercel Dashboard → Project `flowboard-kanban` → Settings → Environment Var
 | Biến | Bắt buộc | Ghi chú |
 |---|---|---|
 | `OPENAI_API_KEY` | Có | Khóa OpenAI của bạn. **Không** đặt tiền tố `VITE_`. |
-| `AGENT_STATE_SECRET` | Nên có | Chuỗi ngẫu nhiên ≥ 32 ký tự (ví dụ `openssl rand -base64 48`). Dùng để ký HMAC trạng thái chờ duyệt xóa. Nếu bỏ trống, server suy ra từ `OPENAI_API_KEY` (xoay khóa OpenAI sẽ làm hết hiệu lực các yêu cầu đang chờ). |
+| `AGENT_STATE_SECRET` | Có | Chuỗi ngẫu nhiên ≥ 32 ký tự (ví dụ `openssl rand -base64 48`). Dùng để ký HMAC trạng thái chờ duyệt xóa (gắn với user + thao tác + mục bị xóa). Thiếu hoặc ngắn hơn 32 ký tự thì trên Vercel Trợ lý AI trả 503 “chưa được cấu hình”. |
 | `OPENAI_MODEL` | Không | Mặc định `gpt-5.4-mini`. |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | Đã có từ Buổi 9 | Server dùng lại hai biến này (hoặc `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY` nếu bạn muốn tách riêng). Chỉ là khóa công khai; **không** dùng service-role/secret key. |
 
@@ -29,15 +29,17 @@ từ chối, không có thao tác nào chạy.
 
 **Ảnh hưởng (đã kiểm tra):**
 
-- Chỉ **thêm**: 2 bảng mới (`agent_requests`, `agent_approvals`), RLS + policy cho 2 bảng đó, 5 hàm
+- Chỉ **thêm**: 2 bảng mới (`agent_requests`, `agent_approvals`), RLS + policy cho 2 bảng đó, 6 hàm
   `agent_*`. Không sửa/xóa bảng, cột, policy hay hàm hiện có → bản Production đang chạy không bị ảnh hưởng.
 - Hàm SECURITY DEFINER kiểm tra `auth.uid()` tường minh, `search_path` cố định, thu hồi quyền `anon`/`public`.
-- Đã chạy trên Supabase Local: pgTAP 95/95, integration 15/15.
+- Giới hạn chống lạm dụng nằm trong DB: 30 yêu cầu/10 phút/người, 30 yêu cầu xóa/giờ, tối đa 10 đang chờ,
+  run state ≤ 200 000 ký tự; bản ghi đã xử lý bị xóa sau 1 ngày → bảng không phình trên DB dùng chung.
+- Đã chạy trên Supabase Local: pgTAP 114/114, integration 15/15.
 
 **Cách áp dụng (khi bạn đồng ý):** Supabase Dashboard → SQL Editor → dán toàn bộ nội dung file migration → Run.
 Hoặc `npx supabase db push` với project đã link (sẽ chỉ đẩy migration chưa có).
 
-**Rollback:** chạy câu lệnh ghi ở đầu file migration (drop 5 hàm `agent_*` rồi drop 2 bảng). Không đụng dữ
+**Rollback:** chạy câu lệnh ghi ở đầu file migration (drop 6 hàm `agent_*` rồi drop 2 bảng). Không đụng dữ
 liệu bảng/công việc của người dùng.
 
 ## 3. Kiểm tra trên Preview
