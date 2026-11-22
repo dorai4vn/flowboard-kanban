@@ -1,7 +1,7 @@
 -- RPCs run as SECURITY INVOKER: RLS still applies, and they must never touch another user's rows.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(19);
 
 insert into auth.users (id, email, aud, role, instance_id) values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'a@test.local', 'authenticated', 'authenticated', '00000000-0000-0000-0000-000000000000'),
@@ -31,6 +31,9 @@ select is((select position from public.tasks where id = 'a0000000-0000-4000-8000
 select lives_ok($$ select public.save_task('{"id":"a0000000-0000-4000-8000-0000000000d4","board_id":"a0000000-0000-4000-8000-0000000000b1","title":"Bốn (sửa)","description":"mô tả","priority":"urgent","status":"todo","due_date":null,"updated_at":"2026-11-22T03:00:00Z"}'::jsonb, array['a0000000-0000-4000-8000-0000000000c1']::uuid[]) $$, 'save_task updates');
 select results_eq($$ select title, priority, due_date, (select array_agg(label_id) from public.task_labels where task_id = t.id) from public.tasks t where id = 'a0000000-0000-4000-8000-0000000000d4' $$,
   $$ values ('Bốn (sửa)'::text, 'urgent'::text, null::date, array['a0000000-0000-4000-8000-0000000000c1'::uuid]) $$, 'update replaced fields and labels');
+
+select throws_ok($$ select public.save_task('{"id":"a0000000-0000-4000-8000-0000000000e9","board_id":"a0000000-0000-4000-8000-0000000000b1","title":"Đã bị xóa","status":"todo"}'::jsonb, array[]::uuid[], true) $$, 'P0002', null, 'updating a task that no longer exists fails instead of recreating it');
+select is((select count(*) from public.tasks where id = 'a0000000-0000-4000-8000-0000000000e9'), 0::bigint, 'missing task was not recreated');
 
 -- move_task: reorder target column atomically
 select lives_ok($$ select public.move_task('a0000000-0000-4000-8000-0000000000d1', 'done', array['a0000000-0000-4000-8000-0000000000d3','a0000000-0000-4000-8000-0000000000d1']::uuid[], '2026-11-22T04:00:00Z') $$, 'move_task moves into done');

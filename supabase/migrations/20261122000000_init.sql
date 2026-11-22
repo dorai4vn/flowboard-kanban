@@ -126,7 +126,7 @@ begin
 end;
 $$;
 
-create function public.save_task(p_task jsonb, p_label_ids uuid[])
+create function public.save_task(p_task jsonb, p_label_ids uuid[], p_must_exist boolean default false)
 returns void
 language plpgsql
 security invoker
@@ -150,6 +150,9 @@ begin
       due_date = (p_task ->> 'due_date')::date,
       updated_at = coalesce((p_task ->> 'updated_at')::timestamptz, now())
     where id = v_id;
+  elsif p_must_exist then
+    -- an edit of a task deleted elsewhere must not bring it back
+    raise exception 'task not found' using errcode = 'P0002';
   else
     -- a task id owned by someone else is invisible here, so this insert fails on the primary key
     insert into public.tasks (id, board_id, title, description, priority, status, position, due_date, completed_at, created_at, updated_at)
@@ -207,8 +210,8 @@ end;
 $$;
 
 revoke all on function public.create_board(jsonb, jsonb, jsonb, boolean) from public, anon;
-revoke all on function public.save_task(jsonb, uuid[]) from public, anon;
+revoke all on function public.save_task(jsonb, uuid[], boolean) from public, anon;
 revoke all on function public.move_task(uuid, text, uuid[], timestamptz) from public, anon;
 grant execute on function public.create_board(jsonb, jsonb, jsonb, boolean) to authenticated;
-grant execute on function public.save_task(jsonb, uuid[]) to authenticated;
+grant execute on function public.save_task(jsonb, uuid[], boolean) to authenticated;
 grant execute on function public.move_task(uuid, text, uuid[], timestamptz) to authenticated;

@@ -98,7 +98,7 @@ isOneToOne: false
 { Args: { "p_completed_at": string,"p_ordered_ids": (string)[],"p_status": string,"p_task_id": string }; Returns: undefined
                            },
 "save_task":
-{ Args: { "p_label_ids": (string)[],"p_task": Json }; Returns: undefined
+{ Args: { "p_label_ids": (string)[],"p_must_exist"?: boolean,"p_task": Json }; Returns: undefined
                            }
           }
           Enums: {
