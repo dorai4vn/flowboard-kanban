@@ -27,7 +27,7 @@ test('create → edit → drag to Hoàn thành → survives reload', async ({ pa
 
 test('reorders within a column by dragging', async ({ page }) => {
   const todo = column(page, 'Cần làm');
-  const titles = () => todo.locator('article p').allTextContents();
+  const titles = () => todo.locator('article > p:first-of-type').allTextContents();
   expect((await titles())[0]).toBe('Hoàn thành bài tập buổi 8');
   await dragTo(page, card(todo, 'Mua quà sinh nhật'), card(todo, 'Hoàn thành bài tập buổi 8'));
   await expect.poll(titles).toEqual(['Mua quà sinh nhật', 'Hoàn thành bài tập buổi 8', 'Đọc tài liệu về AI Agent']);
@@ -60,14 +60,6 @@ test('search without diacritics, filter by priority, clear', async ({ page }) =>
   await expect(card(page, 'Mua quà sinh nhật')).toBeVisible();
   await page.getByRole('button', { name: 'Xóa bộ lọc' }).click();
   await expect(page.locator('article')).toHaveCount(5);
-});
-
-test('today mode focuses on due, overdue and done-today tasks', async ({ page }) => {
-  await page.getByRole('button', { name: 'Hôm nay', exact: true }).click();
-  await expect(page.getByText('Hôm nay: 2 việc cần làm · 1 quá hạn · 1 đã xong')).toBeVisible();
-  await expect(card(page, 'Mua quà sinh nhật')).toHaveCount(0);
-  await expect(card(page, 'Hoàn thành bài tập buổi 8')).toBeVisible();
-  await expect(card(page, 'Viết báo cáo tuần')).toBeVisible();
 });
 
 test('new board with its own accent color persists', async ({ page }) => {

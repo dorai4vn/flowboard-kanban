@@ -1,49 +1,34 @@
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { AlignLeft, Calendar } from 'lucide-react';
-import { formatDueDate } from '../domain/dates';
-import { isDueToday, isOverdue } from '../domain/filters';
-import { PRIORITY_LABELS, type ColumnId, type Label, type Task } from '../domain/types';
+import type { ColumnId, Label, Task } from '../domain/types';
+import { DueBadge, PriorityBadge } from './badges';
 import { MoveMenu } from './MoveMenu';
-import { LABEL_CLASSES, PRIORITY_BAR, PRIORITY_CLASSES } from './styles';
+import { LABEL_CLASSES } from './styles';
 
 type BodyProps = { task: Task; column: ColumnId; labels: Label[]; today: string };
 
 export function TaskCardBody({ task, column, labels, today }: BodyProps) {
-  const overdue = isOverdue(task, column, today);
-  const dueToday = column !== 'done' && isDueToday(task, today);
   const done = column === 'done';
   const taskLabels = task.labelIds.flatMap((id) => labels.filter((l) => l.id === id));
 
-  let dueText = '';
-  let dueClass = 'text-muted';
-  if (task.dueDate) {
-    dueText = `Hạn chót ${formatDueDate(task.dueDate)}`;
-    if (overdue) {
-      dueText += ', quá hạn';
-      dueClass = 'text-red-300 bg-red-500/10';
-    } else if (dueToday) {
-      dueText += ', hôm nay';
-      dueClass = 'text-amber-200 bg-amber-400/10';
-    }
-  }
-
   return (
     <>
-      <span className={`absolute inset-y-3 left-0 w-[3px] rounded-r-full ${PRIORITY_BAR[task.priority]}`} aria-hidden="true" />
-      <p className={`pr-6 text-sm font-medium leading-snug break-words ${done ? 'text-muted line-through decoration-faint' : 'text-fg'}`}>{task.title}</p>
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${PRIORITY_CLASSES[task.priority]}`}>{PRIORITY_LABELS[task.priority]}</span>
-        {taskLabels.map((l) => (
-          <span key={l.id} className={`rounded-md px-1.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${LABEL_CLASSES[l.color]}`}>
-            {l.name}
-          </span>
-        ))}
-        {task.description && <AlignLeft size={13} className="text-faint" aria-label="Có mô tả" />}
+      <p className={`pr-7 text-[13.5px] font-semibold leading-snug break-words ${done ? 'text-muted line-through decoration-faint/70' : 'text-fg'}`}>{task.title}</p>
+      {task.description && <p className="mt-1 line-clamp-2 pr-2 text-xs leading-relaxed text-muted">{task.description}</p>}
+      {taskLabels.length > 0 && (
+        <div className="mt-2.5 flex flex-wrap gap-1">
+          {taskLabels.map((l) => (
+            <span key={l.id} className={`rounded-md px-1.5 py-0.5 text-[10.5px] font-medium ring-1 ring-inset ${LABEL_CLASSES[l.color]}`}>
+              {l.name}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="mt-3 flex items-center gap-1.5 border-t border-line pt-2.5">
+        <PriorityBadge priority={task.priority} />
         {task.dueDate && (
-          <span aria-label={dueText} className={`ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${dueClass}`}>
-            <Calendar size={12} aria-hidden="true" />
-            {formatDueDate(task.dueDate)}
+          <span className="ml-auto">
+            <DueBadge dueDate={task.dueDate} today={today} done={done} />
           </span>
         )}
       </div>
@@ -53,7 +38,7 @@ export function TaskCardBody({ task, column, labels, today }: BodyProps) {
 
 type Props = BodyProps & { onOpen: (id: string) => void; onMove: (id: string, to: ColumnId) => void; readOnly?: boolean };
 
-export const cardClass = 'relative rounded-xl border border-line bg-card p-3 pl-4 shadow-sm shadow-black/20';
+export const cardClass = 'relative rounded-xl border border-line bg-card p-3.5 shadow-[0_1px_0_rgb(255_255_255/0.03)_inset,0_6px_16px_-10px_rgb(0_0_0/0.6)]';
 
 export function TaskCard({ task, column, labels, today, onOpen, onMove, readOnly = false }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({

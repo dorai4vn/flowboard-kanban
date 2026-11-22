@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, SlidersHorizontal, Sun, X } from 'lucide-react';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
 import { DUE_FILTER_LABELS, type DueFilter } from '../domain/filters';
 import { PRIORITIES, PRIORITY_LABELS, type Board } from '../domain/types';
 import { useBoardStore } from '../store/useBoardStore';
@@ -43,7 +43,7 @@ export function FilterBar({ board }: { board: Board }) {
 
   return (
     <div ref={wrap} className="relative flex w-full items-center gap-2 md:w-auto">
-      <div className="relative min-w-0 flex-1 md:w-64 md:flex-none">
+      <div className="relative min-w-0 flex-1 md:w-72 md:flex-none">
         <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-faint" aria-hidden="true" />
         <input
           ref={search}
@@ -67,15 +67,6 @@ export function FilterBar({ board }: { board: Board }) {
         {count > 0 ? `Lọc (${count})` : 'Lọc'}
       </button>
 
-      <button
-        type="button"
-        aria-pressed={filter.todayMode}
-        onClick={() => setFilter({ todayMode: !filter.todayMode })}
-        className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition ${filter.todayMode ? 'border-accent bg-accent text-bg shadow-lg shadow-accent/25' : 'border-line-strong text-muted hover:text-fg'}`}
-      >
-        <Sun size={15} aria-hidden="true" />
-        Hôm nay
-      </button>
 
       {open && (
         <div role="group" aria-label="Bộ lọc" className="absolute right-0 top-full z-30 mt-2 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-line-strong bg-surface p-4 shadow-2xl shadow-black/50">

@@ -59,7 +59,7 @@ test('slow network: several quick moves are all saved in order', async ({ page }
   await page.unroute('**/rest/v1/rpc/move_task');
   await page.reload();
   const done = column(page, 'Hoàn thành');
-  await expect(done.locator('article p')).toHaveText(['Thiết lập dự án FlowBoard', 'Mua quà sinh nhật', 'Đọc tài liệu về AI Agent']);
+  await expect(done.locator('article > p:first-of-type')).toHaveText(['Thiết lập dự án FlowBoard', 'Mua quà sinh nhật', 'Đọc tài liệu về AI Agent']);
 });
 
 test('a failed save is rolled back and explained', async ({ page }) => {

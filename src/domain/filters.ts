@@ -112,7 +112,7 @@ export function toFullIndex(full: string[], visible: string[], visibleIndex: num
 
 export type FocusKind = 'today' | 'overdue';
 
-export type FocusItem = { task: Task; boardId: string; boardName: string; column: ColumnId; daysLate: number };
+export type FocusItem = { task: Task; boardId: string; boardName: string; boardAccent: Board['accent']; column: ColumnId; daysLate: number };
 
 /** Tasks across every board that are due today / overdue and not yet in “Hoàn thành”. */
 export function focusTasks(s: { boards: Record<string, Board>; boardOrder: string[] }, kind: FocusKind, today: string): FocusItem[] {
@@ -127,7 +127,7 @@ export function focusTasks(s: { boards: Record<string, Board>; boardOrder: strin
         if (!task?.dueDate) continue;
         const cmp = compareDateKeys(task.dueDate, today);
         if ((kind === 'today' && cmp === 0) || (kind === 'overdue' && cmp < 0)) {
-          items.push({ task, boardId, boardName: b.name, column, daysLate: Math.max(0, daysBetween(task.dueDate, today)) });
+          items.push({ task, boardId, boardName: b.name, boardAccent: b.accent, column, daysLate: Math.max(0, daysBetween(task.dueDate, today)) });
         }
       }
     }

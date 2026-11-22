@@ -28,3 +28,14 @@ test('mobile: no horizontal scrolling and the task dialog fits', async ({ page }
   expect(box!.x).toBeGreaterThanOrEqual(0);
   expect(box!.x + box!.width).toBeLessThanOrEqual(vw + 1);
 });
+
+test('mobile: bottom navigation reaches Today and Overdue', async ({ page }) => {
+  const nav = page.getByRole('navigation', { name: 'Chế độ xem' });
+  await expect(nav).toBeVisible();
+  await nav.getByRole('button', { name: /^Quá hạn/ }).click();
+  await expect(page.getByRole('list', { name: 'Việc quá hạn' })).toContainText('Viết báo cáo tuần');
+  await nav.getByRole('button', { name: /^Hôm nay/ }).click();
+  await expect(page.getByRole('list', { name: 'Việc đến hạn hôm nay' })).toContainText('Hoàn thành bài tập buổi 8');
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});

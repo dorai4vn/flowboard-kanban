@@ -33,3 +33,11 @@ describe('daysBetween', () => {
     expect(daysBetween('2026-11-22', '2026-11-20')).toBe(-2);
   });
 });
+
+describe('formatLongDate', () => {
+  it('formats a local day in Vietnamese', async () => {
+    const { formatLongDate } = await import('./dates');
+    expect(formatLongDate('2026-11-21')).toBe('Thứ Bảy, 21 tháng 11');
+    expect(formatLongDate('2026-11-22')).toBe('Chủ nhật, 22 tháng 11');
+  });
+});
