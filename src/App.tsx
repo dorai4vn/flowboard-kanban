@@ -7,8 +7,11 @@ import { Header } from './components/Header';
 import { TodaySummary } from './components/TodaySummary';
 import { Toast } from './components/Toast';
 import { useActiveBoard, useBoardStore } from './store/useBoardStore';
+import type { AuthUser } from './auth/authClient';
 
-export default function App({ today = toLocalDateKey(new Date()) }: { today?: string }) {
+type Props = { today?: string; account?: AuthUser; onSignOut?: () => void };
+
+export default function App({ today = toLocalDateKey(new Date()), account, onSignOut }: Props) {
   const board = useActiveBoard();
   const filter = useBoardStore((s) => s.filter);
   const notice = useBoardStore((s) => s.notice);
@@ -25,7 +28,7 @@ export default function App({ today = toLocalDateKey(new Date()) }: { today?: st
 
   return (
     <div data-accent={board.accent} className="board-glow min-h-dvh">
-      <Header board={board}>
+      <Header board={board} account={account} onSignOut={onSignOut}>
         <FilterBar board={board} />
       </Header>
       <main className="mx-auto max-w-[1400px] px-4 py-5 sm:px-6">

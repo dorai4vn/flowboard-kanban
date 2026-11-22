@@ -1,11 +1,15 @@
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, Plus, Settings2 } from 'lucide-react';
+import type { AuthUser } from '../auth/authClient';
 import type { Board } from '../domain/types';
 import { useBoardStore } from '../store/useBoardStore';
 import { BoardSettings } from './BoardSettings';
 import { NewBoardDialog } from './NewBoardDialog';
+import { UserMenu } from './UserMenu';
 
-export function Header({ board, children }: { board: Board; children?: ReactNode }) {
+type Props = { board: Board; children?: ReactNode; account?: AuthUser; onSignOut?: () => void };
+
+export function Header({ board, children, account, onSignOut }: Props) {
   const boardOrder = useBoardStore((s) => s.app.boardOrder);
   const allBoards = useBoardStore((s) => s.app.boards);
   const boards = boardOrder.map((id) => allBoards[id]!);
@@ -67,7 +71,10 @@ export function Header({ board, children }: { board: Board; children?: ReactNode
           </div>
         </div>
 
-        <div className="flex w-full flex-1 items-center gap-2 md:w-auto md:justify-end">{children}</div>
+        <div className="flex w-full flex-1 items-center gap-2 md:w-auto md:justify-end">
+          {children}
+          {account && onSignOut && <UserMenu account={account} onSignOut={onSignOut} />}
+        </div>
       </div>
       {creating && <NewBoardDialog onClose={() => setCreating(false)} />}
     </header>
