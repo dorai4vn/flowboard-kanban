@@ -1,7 +1,7 @@
-import { createBoard } from './board';
-import { addDays, toLocalDateKey } from './dates';
-import { createTask, type TaskInput } from './task';
-import type { AppState, Board, ColumnId } from './types';
+import { createBoard } from './board.js';
+import { addDays, toLocalDateKey } from './dates.js';
+import { createTask, type TaskInput } from './task.js';
+import type { AppState, Board, ColumnId } from './types.js';
 
 /** A fresh board with no tasks, used when the user deletes their last board. */
 export function createEmptyBoard(now: Date): Board {

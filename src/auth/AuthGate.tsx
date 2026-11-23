@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createAssistantApi } from '../assistant/api';
 import App from '../App';
 import { LoginScreen } from '../components/LoginScreen';
 import { StatusScreen } from '../components/StatusScreen';
@@ -16,6 +17,8 @@ export function AuthGate({ auth, today }: { auth: AuthClient; today?: string }) 
   const [exchangeError, setExchangeError] = useState<string | null>(null);
   const status = useBoardStore((s) => s.status);
   const reload = useBoardStore((s) => s.reload);
+  // The assistant calls FlowBoard's own server functions with the user's access token.
+  const assistant = useMemo(() => createAssistantApi(() => auth.getAccessToken()), [auth]);
 
   useEffect(() => {
     let alive = true;
@@ -70,5 +73,5 @@ export function AuthGate({ auth, today }: { auth: AuthClient; today?: string }) 
       </StatusScreen>
     );
   }
-  return <App today={today} account={user} onSignOut={() => void signOut()} />;
+  return <App today={today} account={user} onSignOut={() => void signOut()} assistant={assistant} />;
 }

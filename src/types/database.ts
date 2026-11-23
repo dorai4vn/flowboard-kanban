@@ -3,9 +3,55 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type Database = {
   
-  "public": {
+  "graphql_public": {
           Tables: {
-            "boards": {
+            [_ in never]: never
+          }
+          Views: {
+            [_ in never]: never
+          }
+          Functions: {
+            "graphql":
+{ Args: { "extensions"?: Json,"operationName"?: string,"query"?: string,"variables"?: Json }; Returns: Json
+                           }
+          }
+          Enums: {
+            [_ in never]: never
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        },"public": {
+          Tables: {
+            "agent_approvals": {
+                  Row: {
+                    "action": string,"claim_token": string | null,"created_at": string,"decided_at": string | null,"detail": NonNullable<Json>,"expires_at": string,"id": string,"run_state": string,"run_state_mac": string,"status": string,"target_id": string,"target_label": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"claim_token"?: string | null,"created_at"?: string,"decided_at"?: string | null,"detail"?: NonNullable<Json>,"expires_at": string,"id"?: string,"run_state": string,"run_state_mac": string,"status"?: string,"target_id": string,"target_label": string,"user_id": string
+                  }
+                  Update: {
+                    "action"?: string,"claim_token"?: string | null,"created_at"?: string,"decided_at"?: string | null,"detail"?: NonNullable<Json>,"expires_at"?: string,"id"?: string,"run_state"?: string,"run_state_mac"?: string,"status"?: string,"target_id"?: string,"target_label"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"agent_requests": {
+                  Row: {
+                    "created_at": string,"id": string,"user_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"id"?: string,"user_id"?: string
+                  }
+                  Update: {
+                    "created_at"?: string,"id"?: string,"user_id"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"boards": {
                   Row: {
                     "accent": string,"created_at": string,"id": string,"name": string,"position": number,"user_id": string
                   }
@@ -91,7 +137,28 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "create_board":
+            "agent_claim_approval":
+{ Args: { "p_action": string,"p_id": string,"p_target": string }; Returns: Json
+                           },
+"agent_consume_claim":
+{ Args: { "p_action": string,"p_claim": string,"p_id": string,"p_target": string }; Returns: Json
+                           },
+"agent_create_approval":
+{ Args: { "p_action": string,"p_run_state": string,"p_run_state_mac": string,"p_target": string,"p_ttl_seconds"?: number }; Returns: Json
+                           },
+"agent_execute_approval":
+{ Args: { "p_action": string,"p_claim": string,"p_id": string,"p_target": string }; Returns: Json
+                           },
+"agent_housekeeping":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"agent_rate_limit_hit":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"agent_reject_approval":
+{ Args: { "p_action": string,"p_id": string,"p_target": string }; Returns: Json
+                           },
+"create_board":
 { Args: { "p_board": Json,"p_labels": Json,"p_only_if_empty"?: boolean,"p_tasks": Json }; Returns: boolean
                            },
 "move_task":
@@ -216,7 +283,11 @@ export type CompositeTypes<
   : never
 
 export const Constants = {
-  "public": {
+  "graphql_public": {
+          Enums: {
+            
+          }
+        },"public": {
           Enums: {
             
           }

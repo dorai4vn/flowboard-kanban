@@ -1,6 +1,6 @@
-import type { Board } from '../domain/types';
-import { applyMutation, type BoardsState, type Mutation } from './mutations';
-import { RepositoryError, type BoardRepository } from './repository';
+import type { Board } from '../domain/types.js';
+import { applyMutation, type BoardsState, type Mutation } from './mutations.js';
+import { RepositoryError, type BoardRepository } from './repository.js';
 
 type Deferred = { promise: Promise<void>; resolve: () => void };
 const deferred = (): Deferred => {

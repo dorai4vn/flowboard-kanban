@@ -1,6 +1,6 @@
-import type { Database } from '../types/database';
-import type { AccentColor, Board, ColumnId, LabelColor, Priority, Task } from '../domain/types';
-import type { BoardsState } from './mutations';
+import type { Database } from '../types/database.js';
+import type { AccentColor, Board, ColumnId, LabelColor, Priority, Task } from '../domain/types.js';
+import type { BoardsState } from './mutations.js';
 
 type Tables = Database['public']['Tables'];
 export type BoardRow = Tables['boards']['Row'];

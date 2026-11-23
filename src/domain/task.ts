@@ -1,5 +1,5 @@
-import { newId } from './ids';
-import { COLUMN_IDS, LIMITS, type Board, type ColumnId, type Priority, type Result, type Task } from './types';
+import { newId } from './ids.js';
+import { COLUMN_IDS, LIMITS, type Board, type ColumnId, type Priority, type Result, type Task } from './types.js';
 
 export type TaskInput = {
   title: string;

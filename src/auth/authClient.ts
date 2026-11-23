@@ -8,6 +8,8 @@ export interface AuthClient {
   /** Starts the Google redirect. Resolves with an error message when it could not start. */
   signInWithGoogle(): Promise<string | null>;
   signOut(): Promise<void>;
+  /** Current access token for calling FlowBoard's own server functions (null when signed out). */
+  getAccessToken(): Promise<string | null>;
   /** An OAuth error returned in the redirect URL (e.g. the user cancelled), consumed once. */
   redirectError?(): string | null;
 }

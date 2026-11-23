@@ -13,10 +13,12 @@ import { Sidebar, type View } from './components/Sidebar';
 import { Toast } from './components/Toast';
 import { useActiveBoard, useBoardStore } from './store/useBoardStore';
 import type { AuthUser } from './auth/authClient';
+import type { AssistantApi } from './assistant/api';
+import { AssistantHost } from './components/assistant/AssistantHost';
 
-type Props = { today?: string; account?: AuthUser; onSignOut?: () => void };
+type Props = { today?: string; account?: AuthUser; onSignOut?: () => void; assistant?: AssistantApi };
 
-export default function App({ today = toLocalDateKey(new Date()), account, onSignOut }: Props) {
+export default function App({ today = toLocalDateKey(new Date()), account, onSignOut, assistant }: Props) {
   const board = useActiveBoard();
   const filter = useBoardStore((s) => s.filter);
   const notice = useBoardStore((s) => s.notice);
@@ -32,6 +34,8 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
   const completeTask = useBoardStore((s) => s.completeTask);
   const rescheduleTask = useBoardStore((s) => s.rescheduleTask);
   const [creatingBoard, setCreatingBoard] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const refresh = useBoardStore((s) => s.refresh);
   const focus = useMemo(() => {
     const plan = todayPlan({ boards, boardOrder }, today);
     const overdue = focusTasks({ boards, boardOrder }, 'overdue', today);
@@ -83,7 +87,7 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
   };
 
   return (
-    <div data-accent={board.accent} className="board-glow min-h-dvh md:grid md:grid-cols-[232px_minmax(0,1fr)]">
+    <div data-accent={board.accent} className={`board-glow min-h-dvh md:grid md:grid-cols-[232px_minmax(0,1fr)] ${assistant && assistantOpen ? 'md:pr-[400px]' : ''}`}>
       <Sidebar
         view={view}
         onView={setView}
@@ -95,7 +99,7 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
         readOnly={!online}
       />
       <div className="min-w-0">
-        <Header board={board} view={view} account={account} onSignOut={onSignOut} readOnly={!online} saving={saving}>
+        <Header board={board} view={view} account={account} onSignOut={onSignOut} readOnly={!online} saving={saving} assistantOpen={assistant ? assistantOpen : undefined} onToggleAssistant={() => setAssistantOpen((v) => !v)}>
           <FilterBar board={board} />
         </Header>
         <main className="mx-auto max-w-[1400px] px-4 pb-28 pt-5 sm:px-6 md:pb-10">
@@ -127,6 +131,9 @@ export default function App({ today = toLocalDateKey(new Date()), account, onSig
         </main>
       </div>
       {editor && <TaskDialog key={editor.mode === 'edit' ? editor.id : editor.column} board={board} editor={editor} onClose={() => setEditor(null)} />}
+      {assistant && (
+        <AssistantHost api={assistant} today={today} online={online} open={assistantOpen} onChanged={() => void refresh()} onClose={() => setAssistantOpen(false)} />
+      )}
       {creatingBoard && (
         <NewBoardDialog onClose={() => setCreatingBoard(false)} onCreated={() => setView('board')} />
       )}

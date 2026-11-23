@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { ChevronDown, Plus, Settings2 } from 'lucide-react';
+import { ChevronDown, Plus, Settings2, Sparkles } from 'lucide-react';
 import type { AuthUser } from '../auth/authClient';
 import type { Board } from '../domain/types';
 import { useBoardStore } from '../store/useBoardStore';
@@ -16,13 +16,16 @@ type Props = {
   onSignOut?: () => void;
   readOnly?: boolean;
   saving?: boolean;
+  /** undefined = assistant not available in this build/session */
+  assistantOpen?: boolean;
+  onToggleAssistant?: () => void;
 };
 
 const iconButton =
   'rounded-lg border border-line-strong p-2 text-muted transition hover:border-accent/50 hover:text-fg disabled:cursor-not-allowed disabled:opacity-40';
 
 /** Top bar: board switcher + tools on the board view, account and save state everywhere. */
-export function Header({ board, view, children, account, onSignOut, readOnly = false, saving = false }: Props) {
+export function Header({ board, view, children, account, onSignOut, readOnly = false, saving = false, assistantOpen, onToggleAssistant }: Props) {
   const boardOrder = useBoardStore((s) => s.app.boardOrder);
   const allBoards = useBoardStore((s) => s.app.boards);
   const boards = boardOrder.map((id) => allBoards[id]!);
@@ -82,6 +85,18 @@ export function Header({ board, view, children, account, onSignOut, readOnly = f
               </span>
             )}
           </span>
+          {assistantOpen !== undefined && onToggleAssistant && (
+            <button
+              type="button"
+              aria-label="Trợ lý AI"
+              aria-expanded={assistantOpen}
+              onClick={onToggleAssistant}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 bg-accent-soft px-2.5 py-1.5 text-sm font-semibold text-accent-strong transition hover:border-accent aria-expanded:bg-accent aria-expanded:text-bg"
+            >
+              <Sparkles size={15} aria-hidden="true" />
+              <span className="hidden sm:inline">Trợ lý AI</span>
+            </button>
+          )}
           {account && onSignOut && <UserMenu account={account} onSignOut={onSignOut} />}
         </div>
 

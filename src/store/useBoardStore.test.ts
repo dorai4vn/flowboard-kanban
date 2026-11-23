@@ -336,3 +336,46 @@ describe('rescheduleTask (Overdue view: “Dời sang hôm nay”)', () => {
     expect(repo.persisted).toHaveLength(0);
   });
 });
+
+describe('refresh (after the AI assistant changed data on the server)', () => {
+  it('reloads silently: status stays ready and the open board is kept', async () => {
+    const { store, repo } = await ready();
+    store.getState().createBoard('Đồ án');
+    await store.getState().whenIdle();
+    const open = store.getState().app.activeBoardId;
+    const firstId = store.getState().app.boardOrder[0]!;
+    repo.state = { ...repo.state, boards: { ...repo.state.boards, [firstId]: { ...repo.state.boards[firstId]!, name: 'Đổi từ server' } } };
+    const seen: string[] = [];
+    const off = store.subscribe((s) => seen.push(s.status));
+    await store.getState().refresh();
+    off();
+    expect(seen).not.toContain('loading');
+    expect(store.getState().app.boards[firstId]!.name).toBe('Đổi từ server');
+    expect(store.getState().app.activeBoardId).toBe(open);
+  });
+
+  it('does not overwrite optimistic changes that are still being saved', async () => {
+    const { store, repo } = await ready();
+    repo.hold = true;
+    store.getState().createTask({ title: 'Đang lưu' }, 'todo');
+    const refreshing = store.getState().refresh();
+    await tick();
+    repo.release(); // createTask persist
+    await tick();
+    repo.release(); // refresh load (after the queue drained)
+    await refreshing;
+    expect(titles(store, 'todo')).toContain('Đang lưu');
+  });
+
+  it('ignores a refresh that finishes after the user changed', async () => {
+    const { store, repo } = await ready();
+    repo.hold = true;
+    const refreshing = store.getState().refresh();
+    await tick();
+    const switching = store.getState().switchUser(null);
+    repo.release();
+    await refreshing;
+    await switching;
+    expect(store.getState().app.boardOrder).toEqual([]);
+  });
+});

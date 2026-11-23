@@ -23,6 +23,10 @@
     "playwright.config.ts",
     "tests/e2e",
     "tests/integration",
-    "tests/support"
+    "tests/support",
+    "server/**/*.test.ts",
+    "vitest.live.config.ts",
+    "tests/live",
+    "vite.agent-dev.ts"
   ]
 }

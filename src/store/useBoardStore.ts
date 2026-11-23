@@ -26,6 +26,8 @@ export type BoardStoreState = {
   /** Clear everything of the previous user, cancel their requests, then load `userId` (null = signed out). */
   switchUser: (userId: string | null) => Promise<void>;
   reload: () => Promise<void>;
+  /** Re-read the server state without showing a loading screen (e.g. after the AI assistant changed data). */
+  refresh: () => Promise<void>;
   setOnline: (online: boolean) => void;
   /** Resolves when every queued write has settled (tests, sign-out). */
   whenIdle: () => Promise<void>;
@@ -215,6 +217,21 @@ export function createBoardStore({ repo, now = () => new Date(), prefs = null, i
         await loadFor(epoch, userId);
       },
 
+      refresh: async () => {
+        if (get().status !== 'ready') return;
+        const myEpoch = epoch;
+        await get().whenIdle(); // never race optimistic writes still on their way
+        if (myEpoch !== epoch) return;
+        const seq = writeSeq;
+        try {
+          const data = await repo.load(controller.signal);
+          if (myEpoch !== epoch || seq !== writeSeq || pending > 0) return;
+          confirmed = data;
+          set({ app: view(data) });
+        } catch {
+          // keep showing the current data; the next action or reload will retry
+        }
+      },
       setOnline: (online) => set({ online }),
       whenIdle: async () => {
         let seen: Promise<void>;
