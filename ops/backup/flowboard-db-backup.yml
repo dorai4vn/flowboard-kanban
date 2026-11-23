@@ -1,0 +1,260 @@
+# FlowBoard M10 — manual, encrypted database backup (official Supabase method: `supabase db dump` + psql restore).
+#
+# INTENDED LOCATION: `.github/workflows/flowboard-db-backup.yml` in a PRIVATE repository used only for backups.
+# Stored under ops/ in flowboard-kanban so it never runs there (that repository is public).
+#
+# Read-only on Supabase: pg_dump runs every dump in a READ ONLY transaction, and the fingerprint query runs in
+# `begin transaction read only`. Nothing is written to Supabase.
+#
+# Steps: safety checks → dump (roles, schema incl. RLS policies, data, auth schema for the restore test)
+#        → fingerprint Supabase (read-only) → start a throwaway Supabase stack ON THE RUNNER → official psql
+#        restore (+ exact privileges) → fingerprint the restored copy → must be IDENTICAL (columns, constraints, indexes, triggers,
+#        RLS flags, policies, grants, functions, and an md5 of every row of every FlowBoard table + auth users)
+#        → encrypt with the owner's PUBLIC key → upload one artifact (1–3 days) → delete plaintext.
+#
+# Configuration (repository settings, never in files):
+#   secret   SUPABASE_DB_URL        Session pooler connection string of the FlowBoard project (percent-encoded)
+#   variable FLOWBOARD_PROJECT_REF  FlowBoard project ref (20 characters) — the run refuses any other project
+#   variable BACKUP_PUBLIC_KEY_PEM  RSA public key (≥ 3072 bit). The private key never goes to GitHub.
+
+name: Backup FlowBoard database
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type exactly: BACKUP-FLOWBOARD'
+        required: true
+        type: string
+      retention_days:
+        description: 'Days to keep the encrypted artifact'
+        required: true
+        default: '1'
+        type: choice
+        options: ['1', '3']
+
+# No GITHUB_TOKEN permissions at all: no checkout, no API calls (artifact upload uses the runner's own token).
+permissions: {}
+
+concurrency:
+  group: flowboard-db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    env:
+      WORK: ${{ runner.temp }}/fb
+      TARGET_DIR: ${{ runner.temp }}/restore-target
+      # throwaway Supabase stack started on this runner (local ports, default local passwords; not secrets)
+      TARGET_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      TARGET_ADMIN_URL: postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres
+    steps:
+      - name: Safety checks (private repo, confirmation, FlowBoard project only, public key)
+        env:
+          IS_PRIVATE: ${{ github.event.repository.private }}
+          CONFIRM: ${{ inputs.confirm }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          PROJECT_REF: ${{ vars.FLOWBOARD_PROJECT_REF }}
+          PUBLIC_KEY: ${{ vars.BACKUP_PUBLIC_KEY_PEM }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+          [ "$IS_PRIVATE" = "true" ] || fail "This repository is public. Run backups only from a private repository."
+          [ "$CONFIRM" = "BACKUP-FLOWBOARD" ] || fail "Confirmation text does not match. Nothing was done."
+          [ -n "$SUPABASE_DB_URL" ] || fail "Secret SUPABASE_DB_URL is not set."
+          printf '%s' "$PROJECT_REF" | grep -Eq '^[a-z0-9]{20}$' || fail "Variable FLOWBOARD_PROJECT_REF must be the 20-character FlowBoard project ref."
+          case "$SUPABASE_DB_URL" in *"$PROJECT_REF"*) ;; *) fail "SUPABASE_DB_URL is not for the FlowBoard project. Nothing was done." ;; esac
+          # GitHub masks the whole secret; mask the password on its own too (raw and percent-decoded)
+          python3 - <<'PY'
+          import os, urllib.parse as u
+          p = u.urlsplit(os.environ["SUPABASE_DB_URL"]).password or ""
+          for v in {p, u.unquote(p)}:
+              if v:
+                  print("::add-mask::" + v)
+          PY
+          umask 077; mkdir -p "$WORK"
+          printf '%s\n' "$PUBLIC_KEY" > "$WORK/public.pem"
+          bits=$(openssl pkey -pubin -in "$WORK/public.pem" -noout -text 2>/dev/null | sed -n 's/.*Public-Key: (\([0-9]*\) bit).*/\1/p')
+          [ -n "$bits" ] && [ "$bits" -ge 3072 ] || fail "Variable BACKUP_PUBLIC_KEY_PEM must be an RSA public key of at least 3072 bits."
+          echo "Checks passed (public key: RSA $bits bit)."
+
+      - name: Install Supabase CLI (pinned)
+        uses: supabase/setup-cli@689adcfb80d947100a1eab127289b97d1fb07b13 # v3.2.0
+        with:
+          version: 2.122.1
+
+      - name: Dump roles, schema, data and auth schema (read-only)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          umask 077; mkdir -p "$WORK/backup"; cd "$WORK/backup"
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f roles.sql --role-only
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f schema.sql
+          # Sessions, refresh tokens, MFA secrets, one-time tokens and auth logs are left out on purpose:
+          # not needed to restore FlowBoard (users sign in again) and far more sensitive than the rest.
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f data.sql --use-copy --data-only \
+            -x "storage.buckets_vectors" -x "storage.vector_indexes" \
+            -x "auth.sessions" -x "auth.refresh_tokens" -x "auth.mfa_amr_claims" -x "auth.mfa_factors" \
+            -x "auth.mfa_challenges" -x "auth.one_time_tokens" -x "auth.flow_state" -x "auth.audit_log_entries"
+          # structure of the platform-managed auth schema, so the restore test matches Supabase exactly
+          supabase db dump --db-url "$SUPABASE_DB_URL" -f auth-schema.sql -s auth
+          ls -l
+
+      - name: Check the dump contains FlowBoard tables, RLS, policies, functions and data
+        run: |
+          set -euo pipefail
+          cd "$WORK/backup"
+          fail() { echo "::error::$1"; exit 1; }
+          for t in boards labels tasks task_labels; do
+            grep -Eq "CREATE TABLE (IF NOT EXISTS )?\"public\"\.\"$t\" " schema.sql || fail "schema.sql has no table public.$t"
+            grep -Eq "ALTER TABLE \"public\"\.\"$t\" ENABLE ROW LEVEL SECURITY" schema.sql || fail "schema.sql has no RLS for public.$t"
+            grep -Eq "^COPY \"public\"\.\"$t\" " data.sql || fail "data.sql has no data block for public.$t"
+          done
+          for f in create_board save_task move_task; do
+            grep -Eq "CREATE (OR REPLACE )?FUNCTION \"public\"\.\"$f\"\(" schema.sql || fail "schema.sql has no function public.$f"
+          done
+          grep -q 'CREATE POLICY' schema.sql || fail "schema.sql has no RLS policies"
+          grep -Eq '^COPY "auth"\."users" ' data.sql || fail "data.sql has no auth.users (needed for user_id foreign keys)"
+          for s in sessions refresh_tokens mfa_factors; do
+            ! grep -Eq "^COPY \"auth\"\.\"$s\" " data.sql || fail "data.sql unexpectedly contains auth.$s"
+          done
+          echo "policies: $(grep -c 'CREATE POLICY' schema.sql)"
+
+      - name: Fingerprint Supabase (READ ONLY transaction)
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          cat > "$WORK/fingerprint.sql" <<'SQL'
+          with t(n) as (values ('boards'), ('labels'), ('tasks'), ('task_labels'))
+          select 'rows.' || n, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from public.%I', n), false, true, '')))[1]::text from t
+          union all
+          select 'data.' || n, (xpath('/row/m/text()', query_to_xml(format('select md5(coalesce(string_agg(x::text, ''|'' order by x::text), '''')) as m from public.%I x', n), false, true, '')))[1]::text from t
+          union all select 'rows.auth.users', count(*)::text from auth.users
+          union all select 'data.auth.users', md5(coalesce(string_agg(u::text, '|' order by u.id), '')) from auth.users u
+          union all select 'data.auth.identities', md5(coalesce(string_agg(i::text, '|' order by i.id), '')) from auth.identities i
+          union all select 'schema.columns', md5(string_agg(table_name || '.' || column_name || ':' || data_type || ':' || coalesce(column_default, '') || ':' || is_nullable, '|' order by table_name, column_name)) from information_schema.columns where table_schema = 'public'
+          union all select 'schema.constraints', md5(string_agg(conrelid::regclass || '.' || conname || ':' || pg_get_constraintdef(oid), '|' order by conrelid::regclass::text, conname)) from pg_constraint where connamespace = 'public'::regnamespace
+          union all select 'schema.indexes', md5(string_agg(indexname || ':' || indexdef, '|' order by indexname)) from pg_indexes where schemaname = 'public'
+          union all select 'schema.triggers', md5(coalesce(string_agg(tgrelid::regclass || '.' || tgname, '|' order by tgrelid::regclass::text, tgname), '')) from pg_trigger where not tgisinternal and tgrelid in (select oid from pg_class where relnamespace = 'public'::regnamespace)
+          union all select 'rls.flags', string_agg(relname || '=' || relrowsecurity || '/' || relforcerowsecurity, ' ' order by relname) from pg_class where relnamespace = 'public'::regnamespace and relkind = 'r'
+          union all select 'rls.policies', count(*) || ' ' || md5(string_agg(tablename || '.' || policyname || ':' || permissive || ':' || roles::text || ':' || cmd || ':' || coalesce(qual, '') || ':' || coalesce(with_check, ''), '|' order by tablename, policyname)) from pg_policies where schemaname = 'public'
+          union all select 'grants.tables', md5(string_agg(table_name || ':' || grantee || ':' || privilege_type, '|' order by table_name, grantee, privilege_type)) from information_schema.role_table_grants where table_schema = 'public'
+          union all select 'functions', count(*) || ' ' || md5(string_agg(p.proname || ':' || pg_get_functiondef(p.oid) || ':' || coalesce(array_to_string(p.proacl, ','), ''), '|' order by p.proname)) from pg_proc p where p.pronamespace = 'public'::regnamespace
+          order by 1;
+          SQL
+          psql "$SUPABASE_DB_URL" -X -q -At -F' ' -v ON_ERROR_STOP=1 \
+            -c "begin transaction read only" -f "$WORK/fingerprint.sql" -c "commit" > "$WORK/source.txt"
+          cat "$WORK/source.txt"
+          # Exact privileges of every FlowBoard object. A new Supabase project grants anon/authenticated by default
+          # privileges; replaying this file after the restore puts back exactly what this project has.
+          psql "$SUPABASE_DB_URL" -X -q -At -v ON_ERROR_STOP=1 -c "begin transaction read only" -f - -c "commit" > "$WORK/backup/privileges.sql" <<'SQL'
+          with rel as (
+            select c.oid, c.relowner, c.relacl, case c.relkind when 'S' then 'SEQUENCE' else 'TABLE' end as kind
+            from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind in ('r', 'p', 'v', 'm', 'f', 'S')
+          ), fn as (
+            select p.oid, p.proowner, p.proacl from pg_proc p where p.pronamespace = 'public'::regnamespace
+          ), stmts as (
+            select 1 as o, format('REVOKE ALL ON %s %s FROM PUBLIC, anon, authenticated, service_role;', kind, oid::regclass) as s from rel
+            union all
+            select 2, format('GRANT %s ON %s %s TO %s%s;', a.privilege_type, kind, r.oid::regclass,
+                             case a.grantee when 0 then 'PUBLIC' else quote_ident(pg_get_userbyid(a.grantee)) end,
+                             case when a.is_grantable then ' WITH GRANT OPTION' else '' end)
+              from rel r, aclexplode(r.relacl) a where a.grantee <> r.relowner
+            union all
+            select 3, format('GRANT %s (%s) ON TABLE %s TO %s;', a.privilege_type, quote_ident(att.attname), att.attrelid::regclass,
+                             case a.grantee when 0 then 'PUBLIC' else quote_ident(pg_get_userbyid(a.grantee)) end)
+              from pg_attribute att join rel r on r.oid = att.attrelid, aclexplode(att.attacl) a
+             where att.attnum > 0 and not att.attisdropped and att.attacl is not null
+            union all
+            select 4, format('REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated, service_role;', oid::regprocedure) from fn
+            union all
+            select 5, format('GRANT EXECUTE ON FUNCTION %s TO %s;', f.oid::regprocedure,
+                             case a.grantee when 0 then 'PUBLIC' else quote_ident(pg_get_userbyid(a.grantee)) end)
+              from fn f, aclexplode(coalesce(f.proacl, acldefault('f', f.proowner))) a where a.grantee <> f.proowner
+          )
+          select s from stmts order by o, s;
+          SQL
+          echo "privileges.sql: $(wc -l < "$WORK/backup/privileges.sql") statements"
+
+      - name: Start a throwaway Supabase stack on the runner (restore target)
+        run: |
+          set -euo pipefail
+          mkdir -p "$TARGET_DIR"; cd "$TARGET_DIR"
+          [ -f supabase/config.toml ] || supabase init > /dev/null
+          supabase start -x studio,imgproxy,storage-api,edge-runtime,logflare,vector,realtime,postgres-meta,supavisor,mailpit,kong,gotrue,postgrest > /dev/null
+          psql "$TARGET_URL" -X -At -c "select 'target ready: ' || version()"
+
+      - name: Restore into the throwaway stack (official psql restore) and compare
+        run: |
+          set -euo pipefail
+          cd "$WORK/backup"
+          # Throwaway target only: the platform-managed parts (auth schema structure and cluster role settings)
+          # are applied as the local superuser, exactly as Supabase has them. FlowBoard's own schema and all data
+          # are then restored as `postgres` with the official command, in one transaction.
+          psql "$TARGET_ADMIN_URL" -X -q -v ON_ERROR_STOP=1 -c "drop schema if exists auth cascade" -f auth-schema.sql -f roles.sql > "$WORK/restore.log" 2>&1 \
+            || { tail -n 20 "$WORK/restore.log"; echo "::error::Restoring the auth schema / roles failed."; exit 1; }
+          psql "$TARGET_URL" -X -q \
+            --single-transaction \
+            --variable ON_ERROR_STOP=1 \
+            --file schema.sql \
+            --command 'SET session_replication_role = replica' \
+            --file data.sql \
+            --command 'SET session_replication_role = origin' \
+            --file privileges.sql >> "$WORK/restore.log" 2>&1 || { tail -n 20 "$WORK/restore.log"; echo "::error::Test restore failed."; exit 1; }
+          psql "$TARGET_URL" -X -q -At -F' ' -v ON_ERROR_STOP=1 -f "$WORK/fingerprint.sql" > "$WORK/restored.txt"
+          if ! diff "$WORK/source.txt" "$WORK/restored.txt"; then
+            echo "::error::The restored copy differs from Supabase (see diff above)."; exit 1
+          fi
+          echo "Test restore OK: schema, RLS flags, policies, grants, functions and every row are identical."
+
+      - name: Encrypt with the owner's public key
+        run: |
+          set -euo pipefail
+          cd "$WORK"
+          {
+            echo "FlowBoard database backup"
+            echo "created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "run=${{ github.run_id }}"
+            echo "method=supabase db dump (CLI 2.122.1); restore order: roles.sql, schema.sql, data.sql, privileges.sql (see docs)"
+            echo "excluded=auth.sessions auth.refresh_tokens auth.mfa_* auth.one_time_tokens auth.flow_state auth.audit_log_entries"
+            echo "test_restore=passed (fingerprints identical)"
+            echo "--- fingerprint"; cat source.txt
+            echo "--- sha256"; (cd backup && sha256sum roles.sql schema.sql data.sql privileges.sql auth-schema.sql)
+          } > backup/MANIFEST.txt
+          tar -C backup -czf backup.tar.gz MANIFEST.txt roles.sql schema.sql data.sql privileges.sql auth-schema.sql
+          # one-time AES-256 key + IV + HMAC key, wrapped with RSA-OAEP; only the private key can unwrap it
+          openssl rand 80 > session.key
+          hex() { od -An -v -tx1 | tr -d ' \n'; }
+          KEY=$(head -c 32 session.key | hex); IV=$(tail -c +33 session.key | head -c 16 | hex); MAC=$(tail -c 32 session.key | hex)
+          mkdir -p out
+          openssl enc -aes-256-cbc -K "$KEY" -iv "$IV" -in backup.tar.gz -out out/backup.tar.gz.enc
+          openssl dgst -sha256 -hmac "$MAC" -r out/backup.tar.gz.enc | cut -d' ' -f1 > out/backup.tar.gz.enc.hmac
+          openssl pkeyutl -encrypt -pubin -inkey public.pem -pkeyopt rsa_padding_mode:oaep -in session.key -out out/session.key.enc
+          {
+            echo "Encrypted FlowBoard backup — run ${{ github.run_id }}"
+            echo "Decrypt with the private key that matches BACKUP_PUBLIC_KEY_PEM (see ops/backup/README.md in flowboard-kanban)."
+            echo "ciphertext_sha256=$(sha256sum out/backup.tar.gz.enc | cut -d' ' -f1)"
+          } > out/README.txt
+          # nothing readable may leave the runner
+          if grep -aq -e 'COPY "public"' -e 'CREATE TABLE' out/backup.tar.gz.enc; then echo "::error::Ciphertext check failed."; exit 1; fi
+          rm -f session.key backup.tar.gz
+          unset KEY IV MAC
+          ls -l out
+
+      - name: Upload encrypted artifact (short retention)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: flowboard-db-backup-${{ github.run_id }}-encrypted
+          path: ${{ runner.temp }}/fb/out/
+          retention-days: ${{ inputs.retention_days }}
+          if-no-files-found: error
+
+      - name: Remove plaintext and stop the throwaway stack
+        if: always()
+        run: |
+          rm -rf "$WORK"
+          if [ -d "$TARGET_DIR" ]; then (cd "$TARGET_DIR" && supabase stop --no-backup > /dev/null 2>&1 || true); rm -rf "$TARGET_DIR"; fi
