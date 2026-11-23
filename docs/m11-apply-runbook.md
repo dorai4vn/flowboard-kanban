@@ -1,5 +1,11 @@
 # M11 — Runbook áp migration lên Supabase FlowBoard (phương án A2: dùng chung với M10 Production)
 
+> **Cách ngắn nhất (khuyến nghị):** dán một file duy nhất
+> `supabase/apply/20261123000000_agent_approvals.oneshot.sql` vào SQL Editor → Run. File này tự kiểm tra trước
+> (đúng DB FlowBoard, M11 chưa có), áp migration, tự kiểm tra sau (9 kiểm tra quyền/RLS + số dòng M10 không đổi),
+> tất cả trong **một transaction** — sai bất kỳ điểm nào là hủy toàn bộ, không thay đổi gì. Backup tối thiểu: 4 file CSV
+> (`boards, labels, tasks, task_labels`) đã xuất. Các bước chi tiết bên dưới chỉ dành cho trường hợp cần làm thủ công.
+
 > **CHƯA THỰC HIỆN.** Chỉ chạy sau khi chủ dự án phê duyệt riêng. Không áp dụng cho ContentPilot AI.
 > Mọi lệnh SQL chạy trong Supabase Dashboard của project **FlowBoard** → SQL Editor.
 > Không dán mật khẩu/khóa vào chat, repo hay tài liệu.
