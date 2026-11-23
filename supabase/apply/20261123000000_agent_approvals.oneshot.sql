@@ -1,28 +1,72 @@
--- FlowBoard M11 — ONE-SHOT APPLY (pre-check + migration + post-check in ONE transaction).
--- Paste the whole file into Supabase Dashboard → SQL Editor of the FLOWBOARD project → Run.
--- If any check fails, the transaction is rolled back and NOTHING changes.
+-- FlowBoard M11 — ONE-SHOT APPLY v2 (single DO statement).
+-- Paste the WHOLE file into Supabase Dashboard → SQL Editor of the FLOWBOARD project → Run.
+--
+-- Why one DO statement: a single statement is atomic no matter how the SQL client splits, pools or wraps
+-- statements. Any error anywhere below cancels EVERYTHING in it; nothing is left half-applied.
+-- (v1 used BEGIN ... temp table ... COMMIT across several statements and failed in the SQL Editor.)
+--
+-- Handles every state left by the failed v1 run:
+--   * no M11 objects                         -> apply
+--   * M11 objects (full or partial), no rows -> remove them, then apply cleanly
+--   * M11 tables that already contain rows   -> stop, change nothing
+-- M10 data, policies, grants and functions are fingerprinted before and after and must be identical.
 -- Generated from supabase/migrations/20261123000000_agent_approvals.sql — do not edit by hand.
-begin;
-set local lock_timeout = '5s';
-set local statement_timeout = '60s';
 
--- ---------- PRE-CHECK: right project, M10 present, M11 not yet applied ----------
-do $pre$
+do $m11$
+declare
+  v_before text;
+  v_after  text;
+  v_bad    text;
+  v_rows   bigint := 0;
+  v_n      bigint;
+  v_found  int;
+  v_counts text;
 begin
+  perform set_config('lock_timeout', '5s', true);
+  perform set_config('statement_timeout', '120s', true);
+  perform set_config('client_min_messages', 'warning', true);  -- hide 'does not exist, skipping' notices
+
+  -- ---------- PRE-CHECK ----------
   if (select count(*) from pg_tables where schemaname = 'public' and tablename in ('boards', 'labels', 'tasks', 'task_labels')) <> 4 then
     raise exception 'PRE-CHECK FAILED: this is not the FlowBoard database (M10 tables missing). Nothing changed.';
   end if;
-  if exists (select 1 from pg_tables where schemaname = 'public' and tablename like 'agent\_%')
-     or exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname like 'agent\_%') then
-    raise exception 'PRE-CHECK FAILED: M11 objects already exist. Nothing changed.';
+
+  select (select count(*) from pg_tables where schemaname = 'public' and tablename like 'agent\_%')
+       + (select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like 'agent\_%')
+    into v_found;
+  if to_regclass('public.agent_approvals') is not null then
+    execute 'select count(*) from public.agent_approvals' into v_n;
+    v_rows := v_rows + v_n;
   end if;
-end $pre$;
+  if to_regclass('public.agent_requests') is not null then
+    execute 'select count(*) from public.agent_requests' into v_n;
+    v_rows := v_rows + v_n;
+  end if;
+  if v_rows > 0 then
+    raise exception 'PRE-CHECK FAILED: M11 tables already contain % row(s). Nothing changed.', v_rows;
+  end if;
 
-create temp table m11_before on commit drop as
-  select 'boards' t, count(*) n from public.boards union all select 'labels', count(*) from public.labels
-  union all select 'tasks', count(*) from public.tasks union all select 'task_labels', count(*) from public.task_labels;
+  v_before := (select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from public.boards x) || '/' ||
+           (select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from public.labels x) || '/' ||
+           (select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from public.tasks x) || '/' ||
+           (select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from public.task_labels x) || '/' ||
+           (select md5(string_agg(tablename || policyname || cmd || coalesce(qual, '') || coalesce(with_check, ''), '|' order by tablename, policyname)) from pg_policies where schemaname = 'public' and tablename in ('boards', 'labels', 'tasks', 'task_labels')) || '/' ||
+           (select md5(string_agg(table_name || grantee || privilege_type, '|' order by table_name, grantee, privilege_type)) from information_schema.role_table_grants where table_schema = 'public' and table_name in ('boards', 'labels', 'tasks', 'task_labels')) || '/' ||
+           (select md5(string_agg(p.proname || pg_get_functiondef(p.oid) || coalesce(array_to_string(p.proacl, ','), ''), '|' order by p.proname)) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname not like 'agent\_%');
 
--- ---------- MIGRATION ----------
+  -- ---------- CLEAN ANY LEFTOVER M11 OBJECTS (all empty, verified above) ----------
+    drop function if exists public.agent_execute_approval(uuid, uuid, text, uuid);
+    drop function if exists public.agent_consume_claim(uuid, uuid, text, uuid);
+    drop function if exists public.agent_reject_approval(uuid, text, uuid);
+    drop function if exists public.agent_claim_approval(uuid, text, uuid);
+    drop function if exists public.agent_create_approval(text, uuid, text, text, integer);
+    drop function if exists public.agent_rate_limit_hit();
+    drop function if exists public.agent_housekeeping();
+    drop table if exists public.agent_approvals;
+    drop table if exists public.agent_requests;
+
+  -- ---------- MIGRATION (unchanged text of 20261123000000_agent_approvals.sql) ----------
+  execute $mig$
 -- FlowBoard M11: AI assistant support. ADDITIVE ONLY — no existing table, policy or function is changed.
 --
 -- * agent_requests: per-user request log for rate limiting. Rows are only written by agent_rate_limit_hit(),
@@ -362,12 +406,10 @@ grant execute on function public.agent_claim_approval(uuid, text, uuid) to authe
 grant execute on function public.agent_reject_approval(uuid, text, uuid) to authenticated;
 grant execute on function public.agent_consume_claim(uuid, uuid, text, uuid) to authenticated;
 grant execute on function public.agent_execute_approval(uuid, uuid, text, uuid) to authenticated;
+$mig$;
 
--- ---------- POST-CHECK: objects, security, M10 untouched ----------
-do $post$
-declare bad text;
-begin
-  select string_agg(c, '; ') into bad from (
+  -- ---------- POST-CHECK ----------
+  select string_agg(c, '; ') into v_bad from (
     select 'expected 2 tables' c where (select count(*) from pg_tables where schemaname = 'public' and tablename like 'agent\_%') <> 2
     union all select 'expected 7 functions' where (select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like 'agent\_%') <> 7
     union all select 'RLS not forced' where exists (select 1 from pg_class where relnamespace = 'public'::regnamespace and relname like 'agent\_%' and relkind = 'r' and not (relrowsecurity and relforcerowsecurity))
@@ -377,22 +419,36 @@ begin
     union all select 'authenticated can execute housekeeping' where has_function_privilege('authenticated', 'public.agent_housekeeping()', 'execute')
     union all select 'authenticated can read run_state' where has_column_privilege('authenticated', 'public.agent_approvals', 'run_state', 'select')
     union all select 'authenticated can write new tables' where exists (select 1 from information_schema.role_table_grants where table_schema = 'public' and table_name like 'agent\_%' and grantee = 'authenticated' and privilege_type <> 'SELECT')
-    union all select 'M10 row counts changed' where exists (
-      select 1 from m11_before b where b.n <> case b.t when 'boards' then (select count(*) from public.boards) when 'labels' then (select count(*) from public.labels)
-                                                       when 'tasks' then (select count(*) from public.tasks) else (select count(*) from public.task_labels) end)
   ) x;
-  if bad is not null then
-    raise exception 'POST-CHECK FAILED (%). Everything rolled back, nothing changed.', bad;
+  if v_bad is not null then
+    raise exception 'POST-CHECK FAILED (%). Everything cancelled, nothing changed.', v_bad;
   end if;
-end $post$;
 
-do $hist$
-begin
+  v_after := (select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from public.boards x) || '/' ||
+           (select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from public.labels x) || '/' ||
+           (select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from public.tasks x) || '/' ||
+           (select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from public.task_labels x) || '/' ||
+           (select md5(string_agg(tablename || policyname || cmd || coalesce(qual, '') || coalesce(with_check, ''), '|' order by tablename, policyname)) from pg_policies where schemaname = 'public' and tablename in ('boards', 'labels', 'tasks', 'task_labels')) || '/' ||
+           (select md5(string_agg(table_name || grantee || privilege_type, '|' order by table_name, grantee, privilege_type)) from information_schema.role_table_grants where table_schema = 'public' and table_name in ('boards', 'labels', 'tasks', 'task_labels')) || '/' ||
+           (select md5(string_agg(p.proname || pg_get_functiondef(p.oid) || coalesce(array_to_string(p.proacl, ','), ''), '|' order by p.proname)) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname not like 'agent\_%');
+  if v_after is distinct from v_before then
+    raise exception 'POST-CHECK FAILED: M10 data/policies/grants/functions changed. Everything cancelled, nothing changed.';
+  end if;
+
+  -- ---------- CLI migration history (only if the table exists) ----------
   if to_regclass('supabase_migrations.schema_migrations') is not null then
     execute $q$insert into supabase_migrations.schema_migrations (version, name) values ('20261123000000', 'agent_approvals') on conflict (version) do nothing$q$;
   end if;
-end $hist$;
 
-select 'M11 applied: 2 tables, 7 functions; all post-checks passed; M10 rows: ' ||
-       (select string_agg(t || '=' || n, ', ' order by t) from m11_before) as result;
-commit;
+  select string_agg(t || '=' || n, ', ' order by t) into v_counts from (
+    select 'boards' t, count(*) n from public.boards union all select 'labels', count(*) from public.labels
+    union all select 'tasks', count(*) from public.tasks union all select 'task_labels', count(*) from public.task_labels) c;
+  raise notice 'M11 applied: 2 tables, 7 functions; all post-checks passed; M10 unchanged (%).', v_counts;
+end
+$m11$;
+
+-- Read-only confirmation (shown as the result in the SQL Editor):
+select case when t = 2 and f = 7 then 'M11 OK' else 'M11 NOT APPLIED' end as result, t as agent_tables, f as agent_functions,
+       (select count(*) from public.boards) as boards, (select count(*) from public.tasks) as tasks
+  from (select (select count(*) from pg_tables where schemaname = 'public' and tablename like 'agent\_%') as t,
+               (select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like 'agent\_%') as f) s;

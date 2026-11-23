@@ -1,10 +1,14 @@
 # M11 — Runbook áp migration lên Supabase FlowBoard (phương án A2: dùng chung với M10 Production)
 
-> **Cách ngắn nhất (khuyến nghị):** dán một file duy nhất
-> `supabase/apply/20261123000000_agent_approvals.oneshot.sql` vào SQL Editor → Run. File này tự kiểm tra trước
-> (đúng DB FlowBoard, M11 chưa có), áp migration, tự kiểm tra sau (9 kiểm tra quyền/RLS + số dòng M10 không đổi),
-> tất cả trong **một transaction** — sai bất kỳ điểm nào là hủy toàn bộ, không thay đổi gì. Backup tối thiểu: 4 file CSV
-> (`boards, labels, tasks, task_labels`) đã xuất. Các bước chi tiết bên dưới chỉ dành cho trường hợp cần làm thủ công.
+> **Cách ngắn nhất (khuyến nghị) — v2:** dán `supabase/apply/20261123000000_agent_approvals.oneshot.sql` vào SQL Editor → Run.
+> Toàn bộ kiểm tra trước, migration và kiểm tra sau nằm trong **một câu lệnh `DO`** → nguyên tử trong mọi trình chạy SQL.
+> Xem trạng thái bất cứ lúc nào (chỉ đọc): `supabase/checks/m11/status.sql`.
+>
+> **Sự cố v1 (commit c9c6dcd):** v1 dùng `begin; … create temp table m11_before … on commit drop; … commit;` qua nhiều câu
+> lệnh. SQL Editor của Cloud đã thực thi các câu lệnh không trong cùng một phiên/transaction, nên bảng tạm không còn khi
+> post-check (câu lệnh #42) tham chiếu tới → `42P01`. Tái hiện được bằng chế độ "mỗi câu lệnh một kết nối autocommit":
+> khi đó migration M11 **đã được commit** (2 bảng, 7 hàm, chưa ghi lịch sử), chỉ post-check không chạy. v2 xử lý được trạng
+> thái này (dọn đối tượng M11 rỗng rồi áp lại sạch trong cùng câu lệnh).
 
 > **CHƯA THỰC HIỆN.** Chỉ chạy sau khi chủ dự án phê duyệt riêng. Không áp dụng cho ContentPilot AI.
 > Mọi lệnh SQL chạy trong Supabase Dashboard của project **FlowBoard** → SQL Editor.
