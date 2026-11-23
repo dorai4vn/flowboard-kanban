@@ -1,12 +1,22 @@
 # FlowBoard M11 — Hướng dẫn demo cho giảng viên (khoảng 5 phút)
 
-**Link demo (Vercel Preview):** https://flowboard-kanban-git-claude-m11-ai-agent-dorai4vn.vercel.app
-Mã nguồn: nhánh `claude/m11-ai-agent` · Draft PR https://github.com/dorai4vn/flowboard-kanban/pull/4
+**Link demo (Production):** https://flowboard-kanban-iota.vercel.app/
+Mã nguồn: https://github.com/dorai4vn/flowboard-kanban (nhánh `main`, merge PR #4) · Báo cáo: `docs/m11-report.md`
 
-> Preview dùng chung cơ sở dữ liệu với bản Production M10. Mỗi tài khoản Google chỉ thấy dữ liệu của chính mình (RLS),
-> nên đăng nhập bằng tài khoản của bạn là an toàn. Nên thao tác trên một bảng mới tạo để thử.
+> Đăng nhập bằng tài khoản Google của bạn: mỗi tài khoản chỉ thấy dữ liệu của chính mình (Row Level Security); tài khoản mới
+> được tạo sẵn một bảng mẫu. Nên thao tác trên bảng mẫu hoặc một bảng mới.
 
-## Kịch bản demo
+## Checklist nhanh cho giảng viên (khoảng 3 phút)
+
+- [ ] **Đăng nhập** — mở link → *Đăng nhập với Google* → thấy bảng Kanban.
+- [ ] **Mở Agent** — bấm **✨ Trợ lý AI** (góc phải trên, cạnh avatar).
+- [ ] **Đọc** — gõ `Việc nào đang quá hạn?` → danh sách khớp với bảng.
+- [ ] **Tạo** — gõ `Tạo công việc "Demo AI" hạn ngày mai` → thẻ mới xuất hiện ở cột *Cần làm*.
+- [ ] **Sửa** — gõ `Đánh dấu hoàn thành "Demo AI"` → thẻ chuyển sang *Hoàn thành*.
+- [ ] **Yêu cầu phê duyệt xóa** — gõ `Xóa "Demo AI"` → hiện **thẻ xác nhận đỏ**, chưa xóa gì →
+      bấm **Không xóa** (thẻ còn) → yêu cầu lại → bấm **Xóa** (thẻ biến mất).
+
+## Kịch bản demo chi tiết
 
 | # | Thao tác | Kết quả mong đợi | Điều được chứng minh |
 |---|---|---|---|
