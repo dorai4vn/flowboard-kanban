@@ -154,6 +154,7 @@ function deletionTool(action: ApprovalAction, idField: 'task_id' | 'board_id', d
       if (r.code !== 'ok') {
         ctx.refused = r.code;
         if (r.code === 'target_changed') return bad('Bảng đã thay đổi sau khi người dùng xem thẻ xác nhận. Chưa có gì bị xóa.');
+        if (r.code === 'target_missing') return bad('Mục này đã bị xóa trước đó.');
         return bad('Không xóa được (mục có thể đã bị xóa hoặc phê duyệt không còn hiệu lực).');
       }
       const label = r.target_label ?? '';

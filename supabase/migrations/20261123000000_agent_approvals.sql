@@ -1,7 +1,9 @@
 -- FlowBoard M11: AI assistant support. ADDITIVE ONLY — no existing table, policy or function is changed.
 --
 -- * agent_requests: per-user request log for rate limiting. Rows are only written by agent_rate_limit_hit(),
---   which caps the log at 30 rows per 10 minutes per user and purges rows older than a day.
+--   which caps the log at 30 rows per 10 minutes per user.
+-- * Housekeeping (agent_housekeeping, internal): every agent call clears expired run states and deletes rows
+--   older than a day FOR ALL ACCOUNTS (bounded batches), so abandoned accounts cannot keep data around.
 -- * agent_approvals: server-side human approvals for destructive agent actions (delete task / delete board).
 --   Clients may only SELECT their own rows (without the serialized run state; the server receives it from
 --   agent_claim_approval and the MAC binds it to user + action + target). Every state change goes
@@ -10,7 +12,7 @@
 --   the approval label. The actual DELETE runs in agent_execute_approval as SECURITY INVOKER, so RLS on
 --   boards/tasks still applies to the deletion itself.
 --
--- Rollback (if ever needed): drop function public.agent_rate_limit_hit(), public.agent_execute_approval(uuid, uuid, text, uuid),
+-- Rollback: supabase/rollbacks/20261123000000_agent_approvals.down.sql. Drops public.agent_rate_limit_hit(), public.agent_housekeeping(), public.agent_execute_approval(uuid, uuid, text, uuid),
 --   public.agent_consume_claim(uuid, uuid, text, uuid), public.agent_reject_approval(uuid, text, uuid),
 --   public.agent_claim_approval(uuid, text, uuid), public.agent_create_approval(text, uuid, text, text, integer);
 --   drop table public.agent_approvals, public.agent_requests;
@@ -30,6 +32,64 @@ grant select on table public.agent_requests to authenticated;
 create policy agent_requests_select_own on public.agent_requests for select to authenticated
   using (user_id = (select auth.uid()));
 
+
+-- ============================================================== approvals
+create table public.agent_approvals (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  action text not null check (action in ('delete_task', 'delete_board')),
+  target_id uuid not null,
+  target_label text not null,
+  detail jsonb not null default '{}'::jsonb,
+  run_state text not null check (octet_length(run_state) <= 131072),
+  run_state_mac text not null,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'executed', 'rejected', 'expired')),
+  claim_token uuid,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  decided_at timestamptz
+);
+create index agent_approvals_user_status_idx on public.agent_approvals (user_id, status);
+create index agent_approvals_expires_idx on public.agent_approvals (expires_at);
+create index agent_requests_time_idx on public.agent_requests (created_at);
+
+alter table public.agent_approvals enable row level security;
+alter table public.agent_approvals force row level security;
+revoke all on table public.agent_approvals from anon, authenticated, public;
+-- column-level: clients never read the serialized run state, its MAC or the claim token
+grant select (id, user_id, action, target_id, target_label, detail, status, created_at, expires_at, decided_at)
+  on table public.agent_approvals to authenticated;
+create policy agent_approvals_select_own on public.agent_approvals for select to authenticated
+  using (user_id = (select auth.uid()));
+
+
+-- -------------------------------------------------------------- housekeeping (internal, all accounts, bounded)
+create function public.agent_housekeeping()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  -- expired requests keep no conversation, whatever their status; open ones are closed
+  update public.agent_approvals a
+     set run_state = '',
+         status = case when a.status in ('pending', 'approved') then 'expired' else a.status end,
+         decided_at = coalesce(a.decided_at, now())
+   where a.id in (select x.id from public.agent_approvals x
+                   where x.expires_at <= now() and (x.run_state <> '' or x.status in ('pending', 'approved'))
+                   limit 200 for update skip locked);
+  delete from public.agent_approvals a
+   where a.id in (select x.id from public.agent_approvals x
+                   where x.expires_at < now() - interval '1 day'
+                      or (x.status <> 'pending' and x.created_at < now() - interval '1 day')
+                   limit 500 for update skip locked);
+  delete from public.agent_requests r
+   where r.id in (select x.id from public.agent_requests x where x.created_at < now() - interval '1 day' limit 500 for update skip locked);
+end;
+$$;
+revoke all on function public.agent_housekeeping() from public, anon, authenticated;
+
 -- The only way to write the log: one capped, locked check per request (rate limit hard-coded server-side).
 create function public.agent_rate_limit_hit()
 returns boolean
@@ -43,8 +103,8 @@ begin
   if v_uid is null then
     raise exception 'not authenticated' using errcode = '42501';
   end if;
+  perform public.agent_housekeeping();
   perform pg_advisory_xact_lock(hashtextextended('agent_requests:' || v_uid::text, 0));
-  delete from public.agent_requests r where r.user_id = v_uid and r.created_at < now() - interval '1 day';
   if (select count(*) from public.agent_requests r where r.user_id = v_uid and r.created_at > now() - interval '10 minutes') >= 30 then
     return false;
   end if;
@@ -54,33 +114,6 @@ end;
 $$;
 revoke all on function public.agent_rate_limit_hit() from public, anon;
 grant execute on function public.agent_rate_limit_hit() to authenticated;
-
--- ============================================================== approvals
-create table public.agent_approvals (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users (id) on delete cascade,
-  action text not null check (action in ('delete_task', 'delete_board')),
-  target_id uuid not null,
-  target_label text not null,
-  detail jsonb not null default '{}'::jsonb,
-  run_state text not null check (char_length(run_state) <= 200000),
-  run_state_mac text not null,
-  status text not null default 'pending' check (status in ('pending', 'approved', 'executed', 'rejected', 'expired')),
-  claim_token uuid,
-  created_at timestamptz not null default now(),
-  expires_at timestamptz not null,
-  decided_at timestamptz
-);
-create index agent_approvals_user_status_idx on public.agent_approvals (user_id, status);
-
-alter table public.agent_approvals enable row level security;
-alter table public.agent_approvals force row level security;
-revoke all on table public.agent_approvals from anon, authenticated, public;
--- column-level: clients never read the serialized run state, its MAC or the claim token
-grant select (id, user_id, action, target_id, target_label, detail, status, created_at, expires_at, decided_at)
-  on table public.agent_approvals to authenticated;
-create policy agent_approvals_select_own on public.agent_approvals for select to authenticated
-  using (user_id = (select auth.uid()));
 
 -- -------------------------------------------------------------- create
 create function public.agent_create_approval(p_action text, p_target uuid, p_run_state text, p_run_state_mac text, p_ttl_seconds integer default 600)
@@ -104,15 +137,12 @@ begin
   if p_run_state is null or p_run_state_mac is null then
     raise exception 'missing run state' using errcode = '22023';
   end if;
-  if char_length(p_run_state) > 200000 or char_length(p_run_state_mac) > 200 then
+  if octet_length(p_run_state) > 131072 or octet_length(p_run_state_mac) > 200 then
     raise exception 'run state too large' using errcode = '54000';
   end if;
   -- serialise this user's creations so the budgets below cannot be raced
   perform pg_advisory_xact_lock(hashtextextended('agent_approvals:' || v_uid::text, 0));
-  -- retention: close expired requests (dropping their run state) and purge old decided ones
-  update public.agent_approvals a set status = 'expired', run_state = '', decided_at = now()
-   where a.user_id = v_uid and a.status = 'pending' and a.expires_at <= now();
-  delete from public.agent_approvals a where a.user_id = v_uid and a.status <> 'pending' and a.created_at < now() - interval '1 day';
+  perform public.agent_housekeeping();
 
   -- the target must belong to the caller (explicit check: this function bypasses RLS)
   if p_action = 'delete_task' then
@@ -232,19 +262,26 @@ begin
   if v_uid is null then
     raise exception 'not authenticated' using errcode = '42501';
   end if;
+  select * into v_row from public.agent_approvals a
+   where a.id = p_id and a.user_id = v_uid and a.status = 'approved' and a.claim_token = p_claim
+     and a.action = p_action and a.target_id = p_target
+     for update;
+  if not found then
+    return jsonb_build_object('code', 'invalid_claim');
+  end if;
+  -- the target may have been deleted elsewhere since the card was shown: close the approval cleanly
+  if (p_action = 'delete_task' and not exists (select 1 from public.tasks t where t.id = p_target and t.user_id = v_uid))
+     or (p_action = 'delete_board' and not exists (select 1 from public.boards b where b.id = p_target and b.user_id = v_uid)) then
+    update public.agent_approvals set status = 'expired', run_state = '', decided_at = now() where id = p_id;
+    return jsonb_build_object('code', 'target_missing');
+  end if;
   if p_action = 'delete_board' then
-    select * into v_row from public.agent_approvals a
-     where a.id = p_id and a.user_id = v_uid and a.status = 'approved' and a.claim_token = p_claim
-       and a.action = p_action and a.target_id = p_target
-       for update;
-    if found then
-      -- lock the board (blocks concurrent task inserts via the FK) and compare with the approved task set
-      perform 1 from public.boards b where b.id = p_target and b.user_id = v_uid for update;
-      if (select coalesce(jsonb_agg(t.id order by t.id), '[]'::jsonb) from public.tasks t where t.board_id = p_target and t.user_id = v_uid)
-         is distinct from coalesce(v_row.detail->'task_ids', '[]'::jsonb) then
-        update public.agent_approvals set status = 'expired', run_state = '', decided_at = now() where id = p_id;
-        return jsonb_build_object('code', 'target_changed');
-      end if;
+    -- lock the board (blocks concurrent task inserts via the FK) and compare with the approved task set
+    perform 1 from public.boards b where b.id = p_target and b.user_id = v_uid for update;
+    if (select coalesce(jsonb_agg(t.id order by t.id), '[]'::jsonb) from public.tasks t where t.board_id = p_target and t.user_id = v_uid)
+       is distinct from coalesce(v_row.detail->'task_ids', '[]'::jsonb) then
+      update public.agent_approvals set status = 'expired', run_state = '', decided_at = now() where id = p_id;
+      return jsonb_build_object('code', 'target_changed');
     end if;
   end if;
   update public.agent_approvals a

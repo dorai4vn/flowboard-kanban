@@ -65,7 +65,7 @@ export class SupabaseApprovalStore implements ApprovalStore {
 
   async execute(id: string, claimToken: string, action: ApprovalAction, targetId: string) {
     const { data, error } = await this.db.rpc('agent_execute_approval', { p_id: id, p_claim: claimToken, p_action: action, p_target: targetId });
-    if (error) return { code: pgCode(error) === 'P0002' ? 'target_missing' : 'failed' };
+    if (error) return { code: pgCode(error) === 'P0002' ? 'target_missing' : 'failed' }; // P0002: deleted concurrently
     return data as unknown as { code: string; target_label?: string };
   }
 }

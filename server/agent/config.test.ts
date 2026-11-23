@@ -14,4 +14,12 @@ describe('server config', () => {
   it('local development may derive the secret', () => {
     expect(readServerConfig(base)).toMatchObject({ stateSecret: expect.stringMatching(/^derived:/) });
   });
+
+  it('the scripted test model never replaces the OpenAI key on a deployed server', () => {
+    const { OPENAI_API_KEY: _omit, ...noKey } = base;
+    void _omit;
+    expect(readServerConfig({ ...noKey, FLOWBOARD_AGENT_MODEL: 'scripted', VERCEL: '1', AGENT_STATE_SECRET: 'a'.repeat(32) })).toEqual({ missing: ['OPENAI_API_KEY'] });
+    expect(readServerConfig({ ...noKey, FLOWBOARD_AGENT_MODEL: 'anything' })).toEqual({ missing: ['OPENAI_API_KEY'] });
+    expect(readServerConfig({ ...noKey, FLOWBOARD_AGENT_MODEL: 'scripted' })).toMatchObject({ openaiConfigured: false });
+  });
 });

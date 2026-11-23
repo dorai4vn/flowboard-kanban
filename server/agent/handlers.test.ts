@@ -352,6 +352,8 @@ describe('provider failures', () => {
     const model = new ScriptedModel([() => new Promise((r) => setTimeout(() => r([say('muộn')]), 500))]);
     const res = await handleChat(chat('chậm'), deps(w.session, model, { limits: { runTimeoutMs: 50 } }));
     expect(res.status).toBe(504);
+    // a write may have committed before the abort: the client must reload the board
+    expect((await res.json()).changed).toBe(true);
   });
 
   it('runaway tool loops stop at the turn limit with a clear message', async () => {
@@ -429,5 +431,22 @@ describe('review hardening', () => {
     expect(verifyRunState('test-secret', 'user-a', 'delete_board', w.boardId, row.run_state, row.run_state_mac)).toBe(true);
     expect(verifyRunState('test-secret', 'user-a', 'delete_task', w.boardId, row.run_state, row.run_state_mac)).toBe(false);
     expect(verifyRunState('test-secret', 'user-b', 'delete_board', w.boardId, row.run_state, row.run_state_mac)).toBe(false);
+  });
+
+  it('a long earlier answer in the history is shortened, not rejected', async () => {
+    const model = new ScriptedModel([() => [say('ok')]]);
+    const long = 'Tóm tắt rất dài. '.repeat(300); // ~5 000 characters
+    const res = await handleChat(chat('tiếp', { history: [{ role: 'user', content: 'tóm tắt' }, { role: 'assistant', content: long }] }), deps(w.session, model));
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(model.requests[0]!.input).length).toBeLessThan(4000);
+  });
+
+  it('approving a target that was deleted elsewhere says so (410), nothing else happens', async () => {
+    const model = deleteBoardModel(w.boardId);
+    const { approval } = await (await handleChat(chat('xóa bảng'), deps(w.session, model))).json();
+    w.approvals.executeCode = 'target_missing';
+    const res = await handleApproval(approveBody(approval), deps(w.session, model));
+    expect(res.status).toBe(410);
+    expect((await res.json()).error).toMatch(/đã bị xóa/);
   });
 });

@@ -31,10 +31,12 @@ const ACTIONS = ['delete_task', 'delete_board'] as const;
 
 const chatBody = z.object({
   message: z.string().trim().min(1).max(LIMITS.messageChars),
+  // Earlier turns are context only: long ones are shortened and old ones dropped instead of failing the chat.
   history: z
-    .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(LIMITS.historyChars) }))
-    .max(LIMITS.historyTurns * 2)
-    .default([]),
+    .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(20_000).transform((c) => c.slice(0, LIMITS.historyChars)) }))
+    .max(LIMITS.historyTurns * 4)
+    .default([])
+    .transform((h) => h.slice(-LIMITS.historyTurns * 2)),
   today: z.string().regex(DATE),
 });
 
@@ -61,6 +63,7 @@ const MSG = {
   notDeleted: 'Chưa xóa được. Vui lòng thử lại.',
   targetChanged: 'Bảng đã thay đổi kể từ lúc bạn xem thẻ xác nhận (có công việc được thêm hoặc bớt). Chưa có gì bị xóa — hãy nhờ Trợ lý AI tạo yêu cầu mới.',
   tooLarge: 'Yêu cầu quá lớn.',
+  targetMissing: 'Mục này đã bị xóa trước đó (có thể ở tab khác). Không có gì thay đổi thêm.',
 };
 
 const json = (status: number, body: unknown) =>
@@ -144,7 +147,8 @@ async function runWithTimeout<T>(work: (signal: AbortSignal) => Promise<T>, ms: 
 }
 
 function failure(err: unknown, events: WorkspaceEvent[]): Response {
-  if (err instanceof TimeoutError) return json(504, { error: MSG.timeout, ...summary(events) });
+  // a write may have committed just before the abort: tell the client to reload the board
+  if (err instanceof TimeoutError) return json(504, { error: MSG.timeout, events, changed: true });
   return json(502, { error: MSG.provider, ...summary(events) });
 }
 
@@ -319,6 +323,7 @@ export async function handleApproval(request: Request, deps: HandlerDeps): Promi
 
 function notExecuted(ctx: AgentContext): Response {
   if (ctx.refused === 'target_changed') return json(409, { error: MSG.targetChanged, ...summary(ctx.workspace.events) });
+  if (ctx.refused === 'target_missing') return json(410, { error: MSG.targetMissing, events: ctx.workspace.events, changed: true });
   return json(500, { error: MSG.notDeleted, ...summary(ctx.workspace.events) });
 }
 

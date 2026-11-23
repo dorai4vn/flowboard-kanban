@@ -31,7 +31,8 @@ export function readServerConfig(env: Record<string, string | undefined> = proce
   const missing = [
     !supabaseUrl && 'SUPABASE_URL',
     !supabaseKey && 'SUPABASE_PUBLISHABLE_KEY',
-    !openaiKey && !env.FLOWBOARD_AGENT_MODEL && 'OPENAI_API_KEY',
+    // only the local scripted test model may run without a key, and never on a deployed server
+    !openaiKey && !(env.FLOWBOARD_AGENT_MODEL === 'scripted' && !deployed) && 'OPENAI_API_KEY',
     // deployed servers need a dedicated, strong signing secret (no derivation from another credential)
     deployed && (!stateSecret || stateSecret.length < 32) && 'AGENT_STATE_SECRET',
   ].filter((x): x is string => Boolean(x));

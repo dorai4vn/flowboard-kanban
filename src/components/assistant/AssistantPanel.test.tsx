@@ -173,4 +173,16 @@ describe('panel behaviour', () => {
     expect(within(panel).getByRole('textbox', { name: 'Tin nhắn cho Trợ lý AI' })).toBeDisabled();
     expect(within(panel).getByText('Mất kết nối: Trợ lý AI tạm dừng.')).toBeInTheDocument();
   });
+
+  it('keeps sending after a very long answer: history entries are shortened and the payload stays small', async () => {
+    const long = 'Đây là một bản tóm tắt dài. '.repeat(200); // ~5 600 characters
+    const api = fakeApi(async () => reply({ reply: long }));
+    const { user, panel } = await open(api);
+    const box = within(panel).getByRole('textbox', { name: 'Tin nhắn cho Trợ lý AI' });
+    for (let i = 0; i < 14; i++) await user.type(box, `câu ${i}{Enter}`);
+    const last = api.chat.mock.calls.at(-1)![0] as { history: { content: string }[] };
+    expect(last.history.length).toBeGreaterThan(0);
+    expect(last.history.every((h) => h.content.length <= 1500)).toBe(true);
+    expect(new TextEncoder().encode(JSON.stringify(last)).length).toBeLessThan(48 * 1024);
+  });
 });

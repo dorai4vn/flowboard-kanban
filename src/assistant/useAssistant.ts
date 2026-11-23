@@ -9,6 +9,10 @@ export type ChatMessage =
   | { id: number; role: 'approval'; approval: ApprovalView; state: ApprovalState; note?: string };
 
 const MAX_HISTORY = 24;
+/** Same limits as the server: each earlier turn is shortened and the whole history stays well under the body cap. */
+const MAX_TURN_CHARS = 1500;
+const MAX_HISTORY_BYTES = 32 * 1024;
+const bytes = (s: string) => new TextEncoder().encode(s).length;
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 /** Models sometimes answer in Markdown; the chat renders plain text. */
 export const plain = (s: string) => s.replace(/\*\*(.+?)\*\*/g, '$1').replace(/__(.+?)__/g, '$1').replace(/`([^`]+)`/g, '$1');
@@ -21,10 +25,14 @@ export function useAssistant(api: AssistantApi, today: string, onChanged: () => 
   const next = () => ++seq.current;
   const add = (m: DistributiveOmit<ChatMessage, 'id'>) => setMessages((ms) => [...ms, { ...m, id: next() } as ChatMessage]);
 
-  const history = (ms: ChatMessage[]): ChatTurn[] =>
-    ms
+  const history = (ms: ChatMessage[]): ChatTurn[] => {
+    const turns = ms
       .flatMap((m): ChatTurn[] => (m.role === 'user' ? [{ role: 'user', content: m.text }] : m.role === 'assistant' ? [{ role: 'assistant', content: m.text }] : []))
-      .slice(-MAX_HISTORY);
+      .slice(-MAX_HISTORY)
+      .map((t) => ({ ...t, content: t.content.slice(0, MAX_TURN_CHARS) }));
+    while (turns.length > 0 && bytes(JSON.stringify(turns)) > MAX_HISTORY_BYTES) turns.shift();
+    return turns;
+  };
 
   const send = useCallback(
     async (raw: string, isRetry = false) => {
