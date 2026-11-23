@@ -1,30 +1,34 @@
 # Buổi 11 — Báo cáo Trợ lý AI (kiểm thử, bảo mật, nghiệm thu)
 
-Nhánh `claude/m11-ai-agent` · Draft PR https://github.com/dorai4vn/flowboard-kanban/pull/4 ·
-Preview https://flowboard-kanban-git-claude-m11-ai-agent-dorai4vn.vercel.app ·
-Review migration: `docs/m11-migration-review.md`
+**Production:** https://flowboard-kanban-iota.vercel.app/ (`main`, deployment `e228bb4` — merge PR https://github.com/dorai4vn/flowboard-kanban/pull/4) ·
+Preview (nhánh `claude/m11-ai-agent`): https://flowboard-kanban-git-claude-m11-ai-agent-dorai4vn.vercel.app · Review migration: `docs/m11-migration-review.md`
 
 Ký hiệu trạng thái: **[Local]** kiểm thử tự động trên môi trường cục bộ (Claude chạy) ·
-**[Preview – chủ dự án xác nhận]** nghiệm thu thủ công trên Vercel Preview do chủ dự án thực hiện và báo kết quả ·
+**[Preview – chủ dự án xác nhận]** nghiệm thu thủ công trên Vercel Preview (trước khi merge) ·
+**[Production – chủ dự án xác nhận]** kiểm thử thủ công trên Production sau khi merge ·
 **[Chưa test]** · **[Bị chặn]**. Claude không truy cập được `*.vercel.app` (proxy chặn), nên mọi kết quả
-**[Preview]** là do chủ dự án xác nhận, không phải do Claude tự quan sát.
+Preview/Production là do chủ dự án xác nhận, không phải do Claude tự quan sát.
 
-## 0. Tóm tắt nghiệm thu
+## 0. Tóm tắt nghiệm thu — tách theo môi trường
 
-| Hạng mục | Tự động [Local] | Thủ công [Preview – chủ dự án xác nhận] |
-|---|---|---|
-| Đăng nhập Google | E2E (Supabase Local) | **PASS** |
-| Giao diện Trợ lý AI | E2E `ai-entry`, `ai`, `ai-mobile`; ảnh QC | **PASS** |
-| READ (đọc bảng/việc, quá hạn, hôm nay) | unit, integration, model thật | **PASS** |
-| CREATE | unit, integration, E2E, model thật | **PASS** |
-| UPDATE (tiêu đề, hạn, trạng thái, hoàn thành) | unit, integration, E2E, model thật | **PASS** |
-| DELETE sau khi phê duyệt | pgTAP, unit, integration (Postgres thật), E2E | **PASS** |
-| REJECT (không xóa) | pgTAP, unit, E2E | **PASS** |
-| Cách ly giữa hai tài khoản | pgTAP, integration (2 user, JWT + RLS thật) | **PASS** (2 tài khoản Google) |
-| Hồi quy M10 Production | E2E desktop + mobile (25 test Kanban) | **PASS** |
-| Migration M11 trên Supabase FlowBoard | Postgres dùng một lần: v2 trên trạng thái v1 để lại = migration sạch (210 thuộc tính); M10 giữ nguyên | **M11 OK, 2 bảng, 7 hàm** (chủ dự án chạy v2) |
-| Replay / sửa tham số / hết hạn / tài khoản khác / song song | pgTAP, unit, integration | Chưa thử thủ công (không bắt buộc) |
+| Hạng mục | Tự động [Local] | Preview (trước merge) | Production (sau merge, `e228bb4`) |
+|---|---|---|---|
+| Đăng nhập Google | E2E (Supabase Local) | **PASS** | **PASS** |
+| Giao diện Trợ lý AI | E2E `ai-entry`, `ai`, `ai-mobile`; ảnh QC | **PASS** | **PASS** |
+| READ (quá hạn, hôm nay, tìm việc) | unit, integration, model thật | **PASS** | **PASS** — trả lời đúng 2 công việc quá hạn |
+| CREATE | unit, integration, E2E, model thật | **PASS** | Chưa kiểm thử trên Production |
+| UPDATE (tiêu đề, hạn, trạng thái, hoàn thành) | unit, integration, E2E, model thật | **PASS** | Chưa kiểm thử trên Production |
+| DELETE sau khi phê duyệt | pgTAP, unit, integration (Postgres thật), E2E | **PASS** | Chưa kiểm thử trên Production |
+| REJECT (không xóa) | pgTAP, unit, E2E | **PASS** | Chưa kiểm thử trên Production |
+| Cách ly giữa hai tài khoản | pgTAP, integration (2 user, JWT + RLS thật) | **PASS** (2 tài khoản Google) | Chưa kiểm thử trên Production |
+| Hồi quy Kanban M10 | E2E desktop + mobile (25 test Kanban) | **PASS** | **PASS** (trước merge, M10 Production) |
+| Migration M11 trên Supabase FlowBoard | Postgres dùng một lần: v2 = migration sạch (210 thuộc tính), M10 giữ nguyên | `M11 OK`, 2 bảng, 7 hàm | Cùng DB (Preview và Production dùng chung) |
+| Replay / sửa tham số / hết hạn / tài khoản khác / song song | pgTAP, unit, integration | Chưa thử thủ công | Chưa thử thủ công |
 
+Ghi chú: Preview và Production chạy **cùng mã nguồn** (cây file của `main` @ `e228bb4` giống hệt commit `db59b30` đã nghiệm
+thu trên Preview) và **cùng cơ sở dữ liệu**; khác nhau ở biến môi trường (`OPENAI_API_KEY`, `AGENT_STATE_SECRET` riêng cho
+mỗi môi trường) và URL. Vì vậy các mục “Chưa kiểm thử trên Production” có cơ sở kỳ vọng giống Preview, nhưng **chưa được
+quan sát trực tiếp** trên Production.
 
 ## 1. Công cụ thật của Agent (`server/agent/tools.ts`)
 
@@ -122,15 +126,12 @@ XSS (không `dangerouslySetInnerHTML`), model kịch bản không thể bật tr
 `ai-desktop-loading.png`, `ai-mobile-*.png` (cùng các trạng thái). Lỗi tìm thấy và đã sửa: panel che header/avatar
 trên desktop (nay đẩy layout sang trái), viền focus kép ở ô nhập.
 
-## 7. Rủi ro còn lại và blocker trước khi merge
+## 7. Trạng thái merge và rủi ro còn lại
 
-**Blocker trước khi merge vào `main` (merge = deploy Production):**
-- Production chưa có `OPENAI_API_KEY` và `AGENT_STATE_SECRET` (chỉ đặt cho Preview). Merge mà chưa thêm → nút
-  Trợ lý AI vẫn hiện trên Production nhưng mọi yêu cầu trả 503 “Trợ lý AI chưa được cấu hình”. Cần chủ dự án quyết định:
-  thêm biến cho Production (dùng `AGENT_STATE_SECRET` khác với Preview) trước khi merge.
-- Lịch sử migration: v2 ghi `20261123000000` vào `supabase_migrations.schema_migrations` **nếu bảng này tồn tại**.
-  Nên chạy `supabase/checks/m11/status.sql` (chỉ đọc) để xác nhận; nếu không ghi nhận, sau này `supabase db push`
-  có thể cố áp lại M11 (sẽ lỗi vì đối tượng đã có — không mất dữ liệu).
+**Trạng thái merge:** đã merge PR #4 vào `main` (`e228bb4`), Production Ready. Biến `OPENAI_API_KEY`,
+`AGENT_STATE_SECRET` đã cấu hình cho Production (chủ dự án xác nhận). Project Supabase không có bảng lịch sử CLI
+(`migration_history = no CLI history table`): không ảnh hưởng deploy; **không** chạy `supabase db push` vào Production nếu
+chưa đánh dấu `20261122000000` và `20261123000000` là đã áp dụng (`supabase migration repair --status applied …`).
 
 **Rủi ro đã biết (không chặn merge):**
 - Backup: chỉ có 4 file CSV (`boards, labels, tasks, task_labels`); không có `auth.users` → nếu mất tài khoản,
@@ -145,7 +146,7 @@ trên desktop (nay đẩy layout sang trái), viền focus kép ở ô nhập.
 - Repo `dorai4vn/flowboard-db-backups` và nhánh `claude/flowboard-backup-workflow` không còn dùng; nếu repo đó có secret
   `SUPABASE_DB_URL` thì nên xóa secret.
 
-## 8. Checklist nghiệm thu thủ công — kết quả [Preview – chủ dự án xác nhận]
+## 8. Checklist nghiệm thu thủ công — kết quả [Preview – chủ dự án xác nhận] (Production: xem mục 0)
 
 - [x] Đăng nhập Google (sau khi thêm URL Preview vào Supabase Redirect URLs).
 - [x] Nút “✨ Trợ lý AI” (góc phải header, cạnh avatar) mở panel.

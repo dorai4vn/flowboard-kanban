@@ -2,9 +2,11 @@
 
 Bảng Kanban cá nhân chạy hoàn toàn trên trình duyệt: ba cột **Cần làm → Đang làm → Hoàn thành**, kéo thả,
 hạn chót, độ ưu tiên, nhãn màu, tìm kiếm/lọc, chế độ tập trung **Hôm nay** và màu nhấn riêng cho từng bảng.
-**Buổi 11 (nhánh `claude/m11-ai-agent`):** thêm **Trợ lý AI** đọc/tạo/sửa dữ liệu thật, xóa phải được người dùng duyệt
-(cưỡng chế ở backend). **Demo cho giảng viên: [docs/m11-demo-guide.md](docs/m11-demo-guide.md)** ·
-Preview: https://flowboard-kanban-git-claude-m11-ai-agent-dorai4vn.vercel.app
+**Buổi 11 (đã lên Production, PR #4):** thêm **Trợ lý AI** đọc/tạo/sửa dữ liệu thật, xóa phải được người dùng duyệt
+(cưỡng chế ở backend).
+
+- **Ứng dụng (Production):** https://flowboard-kanban-iota.vercel.app/
+- **Demo cho giảng viên:** [docs/m11-demo-guide.md](docs/m11-demo-guide.md) · **Báo cáo:** [docs/m11-report.md](docs/m11-report.md)
 
 **Buổi 9 (nhánh `claude/m9-supabase`):** dữ liệu lưu trên **Supabase PostgreSQL**, đăng nhập bằng
 **Google**, mỗi tài khoản chỉ thấy dữ liệu của mình nhờ **Row Level Security**.
@@ -67,10 +69,11 @@ Lần đầu trên máy mới có thể cần `npx playwright install chromium`.
 2. Framework tự nhận **Vite** (đã cấu hình trong `vercel.json`: build `npm run build`, output `dist`).
 3. Từ Buổi 9 cần biến môi trường `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY` và thêm domain Vercel vào
    Redirect URLs của Supabase + Authorized JavaScript origins của Google (xem mục 8 trong
-   [docs/m9-setup-guide.md](docs/m9-setup-guide.md)). Production hiện vẫn chạy bản Buổi 8 từ `main`.
+   [docs/m9-setup-guide.md](docs/m9-setup-guide.md)). Production chạy `main` (bản Buổi 11, deployment `e228bb4`).
 4. Buổi 11 (Trợ lý AI): biến **server** `OPENAI_API_KEY`, `AGENT_STATE_SECRET` (≥ 32 ký tự) cho môi trường dùng Trợ lý,
    migration `20261123000000_agent_approvals.sql` (đã áp dụng trên Supabase FlowBoard bằng file one-shot v2), và URL
-   Preview trong Supabase Auth → Redirect URLs — xem [docs/m11-setup-guide.md](docs/m11-setup-guide.md).
+   của môi trường trong Supabase Auth → Redirect URLs — xem [docs/m11-setup-guide.md](docs/m11-setup-guide.md).
+   Production đã cấu hình đủ (chủ dự án xác nhận).
 
 ## Cấu trúc
 
