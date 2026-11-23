@@ -2,6 +2,10 @@
 
 Bảng Kanban cá nhân chạy hoàn toàn trên trình duyệt: ba cột **Cần làm → Đang làm → Hoàn thành**, kéo thả,
 hạn chót, độ ưu tiên, nhãn màu, tìm kiếm/lọc, chế độ tập trung **Hôm nay** và màu nhấn riêng cho từng bảng.
+**Buổi 11 (nhánh `claude/m11-ai-agent`):** thêm **Trợ lý AI** đọc/tạo/sửa dữ liệu thật, xóa phải được người dùng duyệt
+(cưỡng chế ở backend). **Demo cho giảng viên: [docs/m11-demo-guide.md](docs/m11-demo-guide.md)** ·
+Preview: https://flowboard-kanban-git-claude-m11-ai-agent-dorai4vn.vercel.app
+
 **Buổi 9 (nhánh `claude/m9-supabase`):** dữ liệu lưu trên **Supabase PostgreSQL**, đăng nhập bằng
 **Google**, mỗi tài khoản chỉ thấy dữ liệu của mình nhờ **Row Level Security**.
 
@@ -52,6 +56,7 @@ npm run test:integration  # repository thật với 2 user trên Supabase Local
 npm run test:e2e          # Playwright (desktop + mobile) trên Supabase Local
 npm run check:secrets     # quét secret trong file đã track và dist/
 npm run test:agent-live   # Trợ lý AI với model OpenAI thật (cần OPENAI_API_KEY, tốn token)
+npm run qc:screens-ai     # ảnh Visual QC của Trợ lý AI (desktop + mobile)
 ```
 
 Lần đầu trên máy mới có thể cần `npx playwright install chromium`.
@@ -63,8 +68,9 @@ Lần đầu trên máy mới có thể cần `npx playwright install chromium`.
 3. Từ Buổi 9 cần biến môi trường `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY` và thêm domain Vercel vào
    Redirect URLs của Supabase + Authorized JavaScript origins của Google (xem mục 8 trong
    [docs/m9-setup-guide.md](docs/m9-setup-guide.md)). Production hiện vẫn chạy bản Buổi 8 từ `main`.
-4. Buổi 11 (Trợ lý AI) cần thêm `OPENAI_API_KEY`, `AGENT_STATE_SECRET` và migration agent — xem
-   [docs/m11-setup-guide.md](docs/m11-setup-guide.md).
+4. Buổi 11 (Trợ lý AI): biến **server** `OPENAI_API_KEY`, `AGENT_STATE_SECRET` (≥ 32 ký tự) cho môi trường dùng Trợ lý,
+   migration `20261123000000_agent_approvals.sql` (đã áp dụng trên Supabase FlowBoard bằng file one-shot v2), và URL
+   Preview trong Supabase Auth → Redirect URLs — xem [docs/m11-setup-guide.md](docs/m11-setup-guide.md).
 
 ## Cấu trúc
 
@@ -96,4 +102,5 @@ docs/            Spec, Plan, báo cáo kiểm thử, báo cáo review, ảnh ch�
 - Buổi 10 — Spec/Plan: [docs/superpowers/specs/2026-11-22-flowboard-m10-ui-focus-design.md](docs/superpowers/specs/2026-11-22-flowboard-m10-ui-focus-design.md), [docs/superpowers/plans/2026-11-22-flowboard-m10-ui-focus.md](docs/superpowers/plans/2026-11-22-flowboard-m10-ui-focus.md)
 - Buổi 10 — Báo cáo: [docs/m10-report.md](docs/m10-report.md)
 - Buổi 11 — Spec/Plan: [docs/superpowers/specs/2026-11-23-flowboard-m11-ai-agent-design.md](docs/superpowers/specs/2026-11-23-flowboard-m11-ai-agent-design.md), [docs/superpowers/plans/2026-11-23-flowboard-m11-ai-agent.md](docs/superpowers/plans/2026-11-23-flowboard-m11-ai-agent.md)
+- Buổi 11 — **Demo:** [docs/m11-demo-guide.md](docs/m11-demo-guide.md)
 - Buổi 11 — Cấu hình: [docs/m11-setup-guide.md](docs/m11-setup-guide.md) · Review migration: [docs/m11-migration-review.md](docs/m11-migration-review.md) · Runbook áp dụng: [docs/m11-apply-runbook.md](docs/m11-apply-runbook.md) · Báo cáo: [docs/m11-report.md](docs/m11-report.md) · Bản ghi model thật: [docs/m11-live-transcript.md](docs/m11-live-transcript.md)

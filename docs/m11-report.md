@@ -4,8 +4,27 @@ Nhánh `claude/m11-ai-agent` · Draft PR https://github.com/dorai4vn/flowboard-k
 Preview https://flowboard-kanban-git-claude-m11-ai-agent-dorai4vn.vercel.app ·
 Review migration: `docs/m11-migration-review.md`
 
-Ký hiệu trạng thái: **[Local]** đã kiểm chứng cục bộ · **[Preview]** đã kiểm chứng trên Preview ·
-**[Chưa test]** · **[Bị chặn]** do thiếu credential/mạng.
+Ký hiệu trạng thái: **[Local]** kiểm thử tự động trên môi trường cục bộ (Claude chạy) ·
+**[Preview – chủ dự án xác nhận]** nghiệm thu thủ công trên Vercel Preview do chủ dự án thực hiện và báo kết quả ·
+**[Chưa test]** · **[Bị chặn]**. Claude không truy cập được `*.vercel.app` (proxy chặn), nên mọi kết quả
+**[Preview]** là do chủ dự án xác nhận, không phải do Claude tự quan sát.
+
+## 0. Tóm tắt nghiệm thu
+
+| Hạng mục | Tự động [Local] | Thủ công [Preview – chủ dự án xác nhận] |
+|---|---|---|
+| Đăng nhập Google | E2E (Supabase Local) | **PASS** |
+| Giao diện Trợ lý AI | E2E `ai-entry`, `ai`, `ai-mobile`; ảnh QC | **PASS** |
+| READ (đọc bảng/việc, quá hạn, hôm nay) | unit, integration, model thật | **PASS** |
+| CREATE | unit, integration, E2E, model thật | **PASS** |
+| UPDATE (tiêu đề, hạn, trạng thái, hoàn thành) | unit, integration, E2E, model thật | **PASS** |
+| DELETE sau khi phê duyệt | pgTAP, unit, integration (Postgres thật), E2E | **PASS** |
+| REJECT (không xóa) | pgTAP, unit, E2E | **PASS** |
+| Cách ly giữa hai tài khoản | pgTAP, integration (2 user, JWT + RLS thật) | **PASS** (2 tài khoản Google) |
+| Hồi quy M10 Production | E2E desktop + mobile (25 test Kanban) | **PASS** |
+| Migration M11 trên Supabase FlowBoard | Postgres dùng một lần: v2 trên trạng thái v1 để lại = migration sạch (210 thuộc tính); M10 giữ nguyên | **M11 OK, 2 bảng, 7 hàm** (chủ dự án chạy v2) |
+| Replay / sửa tham số / hết hạn / tài khoản khác / song song | pgTAP, unit, integration | Chưa thử thủ công (không bắt buộc) |
+
 
 ## 1. Công cụ thật của Agent (`server/agent/tools.ts`)
 
@@ -49,18 +68,18 @@ trong `agent_execute_approval` (SECURITY INVOKER, RLS vẫn áp dụng) cùng tr
 | Run sau khi duyệt cố xóa mục thứ hai → chỉ tạo yêu cầu duyệt mới | [Local] | unit |
 | Bảng thay đổi (thêm/bớt việc) sau khi hiện thẻ → không xóa, 409 | [Local] | pgTAP, unit |
 
-## 4. Kết quả kiểm thử (chạy thật trên máy cục bộ, commit cuối của nhánh)
+## 4. Kết quả kiểm thử tự động (lần chạy cuối, commit `8b4a889`) [Local]
 
 | Lớp | Lệnh | Kết quả |
 |---|---|---|
-| Lint + typecheck + unit/component + build | `npm run check` | **220/220 pass**, build OK [Local] |
-| DB RLS + RPC (pgTAP, 7 file) | `npm run test:db` | **126/126 pass** [Local] |
-| Integration (Supabase Local, 2 user, JWT + RLS thật) | `npm run test:integration` | **15/15 pass** [Local] |
-| E2E desktop + mobile + AI | `npm run test:e2e` | **25 pass**, 4 skip (ảnh QC chạy riêng) [Local] |
-| Model thật `gpt-5.4-mini` | `npm run test:agent-live` | **5/5 pass** [Local] |
-| Tác động migration + rollback (Postgres dùng một lần) | `bash scripts/check-migration-impact.sh` | **PASS**: dữ liệu/schema M10 giữ nguyên ở 5 bước [Local] |
-| Quét secret | `npm run check:secrets` | OK; `dist/` không chứa `OPENAI_API_KEY` [Local] |
-| Preview | — | Build **thành công** trên Vercel; chức năng AI **[Bị chặn]**: thiếu migration trên DB của Preview + `OPENAI_API_KEY`/`AGENT_STATE_SECRET`; container không truy cập được `*.vercel.app` |
+| Lint + typecheck + unit/component + build | `npm run check` | **220/220 pass**, build OK |
+| DB RLS + RPC (pgTAP, 7 file) | `npm run test:db` | **126/126 pass** |
+| Integration (Supabase Local, 2 user, JWT + RLS thật) | `npm run test:integration` | **15/15 pass** (lần chạy ngay sau `db reset` lỗi ở bước khởi tạo — 8 pass/7 skip — do dịch vụ Auth local chưa sẵn sàng; chạy lại: 15/15) |
+| E2E desktop + mobile + AI | `npm run test:e2e` | **27 pass**, 4 skip (ảnh QC chạy riêng) |
+| Model thật `gpt-5.4-mini` | `npm run test:agent-live` | **5/5 pass** (lần chạy gần nhất ở commit `5bffd83`; các commit sau không đổi code agent) |
+| Tác động migration + rollback (Postgres dùng một lần) | `bash scripts/check-migration-impact.sh` | **PASS** |
+| File áp dụng v2 trên trạng thái giống Production (5/20/20/18) | xem `docs/m11-apply-runbook.md` | **PASS**: postcheck 9/9, M10 giống hệt |
+| Quét secret | `npm run check:secrets` | OK; bundle không chứa `OPENAI_API_KEY` |
 
 ## 5. Review bảo mật độc lập
 
@@ -99,31 +118,42 @@ XSS (không `dangerouslySetInnerHTML`), model kịch bản không thể bật tr
 
 ## 6. Ảnh chụp (Visual QC) — `docs/screenshots/m11/`
 
-`ai-desktop-empty.png`, `ai-desktop-create-update.png`, `ai-desktop-approval.png`, `ai-desktop-error.png`,
+`ai-desktop-entry.png` (vị trí nút, panel đóng), `ai-desktop-empty.png`, `ai-desktop-create-update.png`, `ai-desktop-approval.png`, `ai-desktop-error.png`,
 `ai-desktop-loading.png`, `ai-mobile-*.png` (cùng các trạng thái). Lỗi tìm thấy và đã sửa: panel che header/avatar
 trên desktop (nay đẩy layout sang trái), viền focus kép ở ô nhập.
 
-## 7. Rủi ro còn lại
+## 7. Rủi ro còn lại và blocker trước khi merge
 
-- Migration chưa áp dụng lên Supabase Cloud (chờ chủ dự án duyệt) → Trợ lý AI trên Preview chưa chạy được.
-- Chưa kiểm thử trên Preview thật (đăng nhập Google + model thật + DB Cloud).
-- Model có thể hiểu sai yêu cầu mơ hồ (ví dụ hai việc trùng tên) — đã hướng dẫn model hỏi lại, nhưng các
-  thao tác tạo/sửa không cần duyệt; chỉ xóa mới cần.
-- Chi phí OpenAI: giới hạn 30 yêu cầu/10 phút/người, tối đa 8 lượt tool/yêu cầu; chưa có hạn mức theo ngày.
-- Dọn dẹp chạy khi có người dùng Trợ lý (không cần `pg_cron`); nếu không ai dùng, tối đa ~10 × 128 KB mỗi tài khoản nằm chờ.
-- N-2 ở mục 5; không có giới hạn theo IP trước bước xác thực (khuyến nghị Vercel Firewall).
-- Lịch sử chat chỉ lưu trong bộ nhớ trình duyệt (mất khi tải lại trang) — theo thiết kế.
-- Dữ liệu bị gửi tới OpenAI: tiêu đề/mô tả công việc mà tool trả về trong cuộc trò chuyện.
+**Blocker trước khi merge vào `main` (merge = deploy Production):**
+- Production chưa có `OPENAI_API_KEY` và `AGENT_STATE_SECRET` (chỉ đặt cho Preview). Merge mà chưa thêm → nút
+  Trợ lý AI vẫn hiện trên Production nhưng mọi yêu cầu trả 503 “Trợ lý AI chưa được cấu hình”. Cần chủ dự án quyết định:
+  thêm biến cho Production (dùng `AGENT_STATE_SECRET` khác với Preview) trước khi merge.
+- Lịch sử migration: v2 ghi `20261123000000` vào `supabase_migrations.schema_migrations` **nếu bảng này tồn tại**.
+  Nên chạy `supabase/checks/m11/status.sql` (chỉ đọc) để xác nhận; nếu không ghi nhận, sau này `supabase db push`
+  có thể cố áp lại M11 (sẽ lỗi vì đối tượng đã có — không mất dữ liệu).
 
-## 8. Checklist nghiệm thu thủ công (trên Preview, sau khi cấu hình)
+**Rủi ro đã biết (không chặn merge):**
+- Backup: chỉ có 4 file CSV (`boards, labels, tasks, task_labels`); không có `auth.users` → nếu mất tài khoản,
+  khôi phục cần gán lại `user_id`. Schema/RLS/hàm dựng lại được từ `supabase/migrations`.
+- Preview và Production dùng chung một DB: thao tác Trợ lý trên Preview ghi vào dữ liệu thật.
+- Tạo/sửa không cần phê duyệt (chỉ xóa cần); model có thể hiểu sai yêu cầu mơ hồ.
+- Chi phí OpenAI: 30 yêu cầu/10 phút/người, tối đa 8 lượt tool/yêu cầu; chưa có hạn mức theo ngày.
+- RPC xóa không có timeout riêng (Postgres treo → 504; không xóa sai). Không giới hạn theo IP trước bước xác thực.
+- Hai người sửa cùng lúc: bản lưu sau thắng (giống giao diện hiện tại).
+- Dữ liệu gửi tới OpenAI: tiêu đề/mô tả công việc mà tool trả về trong cuộc trò chuyện.
+- Lịch sử chat chỉ trong bộ nhớ trình duyệt (mất khi tải lại) — theo thiết kế.
+- Repo `dorai4vn/flowboard-db-backups` và nhánh `claude/flowboard-backup-workflow` không còn dùng; nếu repo đó có secret
+  `SUPABASE_DB_URL` thì nên xóa secret.
 
-- [ ] Đăng nhập Google; Kanban vẫn kéo thả, tạo/sửa/xóa thủ công bình thường.
-- [ ] Nút “Trợ lý AI” mở panel bên phải (desktop) / toàn màn hình (mobile); Esc hoặc X đóng được.
-- [ ] “Việc nào đang quá hạn?” trả đúng danh sách của tài khoản mình.
-- [ ] “Tạo công việc Ôn tập chương 4 hạn ngày mai” → thẻ mới xuất hiện trên bảng không cần tải lại.
-- [ ] “Đổi hạn Ôn tập chương 4 sang thứ Sáu” và “Đánh dấu hoàn thành Ôn tập chương 4” → bảng cập nhật.
-- [ ] “Xóa Ôn tập chương 4” → hiện thẻ xác nhận đúng tên + bảng; “Không xóa” giữ nguyên công việc.
-- [ ] Lặp lại và bấm “Xóa” → công việc biến mất; bấm lại không xóa thêm gì.
-- [ ] Đăng nhập tài khoản thứ hai: không thấy dữ liệu tài khoản thứ nhất qua Trợ lý.
-- [ ] Mất mạng: panel báo tạm dừng, không gửi được.
-- [ ] Production (`main`) không thay đổi.
+## 8. Checklist nghiệm thu thủ công — kết quả [Preview – chủ dự án xác nhận]
+
+- [x] Đăng nhập Google (sau khi thêm URL Preview vào Supabase Redirect URLs).
+- [x] Nút “✨ Trợ lý AI” (góc phải header, cạnh avatar) mở panel.
+- [x] READ — hỏi việc quá hạn / tóm tắt hôm nay.
+- [x] CREATE — tạo công việc qua Trợ lý, thẻ xuất hiện trên bảng.
+- [x] UPDATE — đổi hạn / tiêu đề / hoàn thành.
+- [x] REJECT — thẻ xác nhận xóa → “Không xóa” → công việc còn nguyên.
+- [x] DELETE sau khi bấm “Xóa” → công việc bị xóa.
+- [x] Cách ly giữa hai tài khoản Google.
+- [x] Hồi quy M10 Production.
+- [x] Migration v2 trên Supabase FlowBoard: `M11 OK`, 2 bảng, 7 hàm.

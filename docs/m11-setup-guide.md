@@ -29,12 +29,11 @@ Supabase → project FlowBoard → **Authentication → URL Configuration → Re
 `https://flowboard-kanban-git-claude-m11-ai-agent-dorai4vn.vercel.app/**` → Save.
 Chỉ thêm vào danh sách cho phép; không đổi Site URL, không ảnh hưởng người dùng Production. Google Console không cần đổi.
 
-## 2. Migration Supabase (cần chủ dự án duyệt trước khi áp dụng)
+## 2. Migration Supabase — ĐÃ ÁP DỤNG
 
-Preview dùng chung project Supabase Cloud với Production, nên migration
-`supabase/migrations/20261123000000_agent_approvals.sql` **chưa được áp dụng**. Khi chưa có migration, mọi lời gọi
-chat trả `503` (“Không tải được dữ liệu của bạn. Vui lòng thử lại.”) vì không ghi được nhật ký giới hạn tần suất — tức là an toàn theo hướng
-từ chối, không có thao tác nào chạy.
+Trạng thái: chủ dự án đã chạy `supabase/apply/20261123000000_agent_approvals.oneshot.sql` (v2) trên Supabase FlowBoard
+→ `M11 OK`, 2 bảng, 7 hàm; hồi quy M10 PASS. **Không chạy lại.** Kiểm tra trạng thái bất cứ lúc nào (chỉ đọc):
+`supabase/checks/m11/status.sql`. Lịch sử sự cố v1 và cách v2 xử lý: `docs/m11-apply-runbook.md`.
 
 **Ảnh hưởng (đã kiểm tra):**
 
