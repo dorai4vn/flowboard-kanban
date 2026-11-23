@@ -101,6 +101,8 @@ begin
          decided_at = coalesce(a.decided_at, now())
    where a.id in (select x.id from public.agent_approvals x
                    where x.expires_at <= now() and (x.run_state <> '' or x.status in ('pending', 'approved'))
+                     -- leave a claim that is executing right now (approved < 2 min ago) to finish
+                     and not (x.status = 'approved' and x.decided_at > now() - interval '2 minutes')
                    limit 200 for update skip locked);
   delete from public.agent_approvals a
    where a.id in (select x.id from public.agent_approvals x
@@ -126,11 +128,11 @@ begin
   if v_uid is null then
     raise exception 'not authenticated' using errcode = '42501';
   end if;
-  perform public.agent_housekeeping();
   perform pg_advisory_xact_lock(hashtextextended('agent_requests:' || v_uid::text, 0));
   if (select count(*) from public.agent_requests r where r.user_id = v_uid and r.created_at > now() - interval '10 minutes') >= 30 then
     return false;
   end if;
+  perform public.agent_housekeeping(); -- only for accepted requests, so it cannot be triggered without limit
   insert into public.agent_requests (user_id) values (v_uid);
   return true;
 end;
@@ -410,8 +412,8 @@ RLS: agent_approvals force=t, agent_requests force=t
 
 | Hàm | Loại | EXECUTE | Việc làm |
 |---|---|---|---|
-| `agent_housekeeping()` | DEFINER, `search_path=''` | **không ai** (nội bộ; revoke cả `authenticated`) | cho mọi tài khoản, theo lô giới hạn (`limit` + `for update skip locked`): xóa trắng `run_state` của bản ghi hết hạn và đóng bản ghi còn mở; xóa bản ghi/nhật ký > 1 ngày |
-| `agent_rate_limit_hit()` | DEFINER, `search_path=''` | `authenticated` | dọn dẹp, rồi ghi 1 lượt nếu < 30 trong 10 phút, trả true/false |
+| `agent_housekeeping()` | DEFINER, `search_path=''` | **không ai** (nội bộ; revoke cả `authenticated`) | cho mọi tài khoản, theo lô giới hạn (`limit` + `for update skip locked`): xóa trắng `run_state` của bản ghi hết hạn và đóng bản ghi còn mở (trừ claim đang thực thi < 2 phút); xóa bản ghi/nhật ký > 1 ngày |
+| `agent_rate_limit_hit()` | DEFINER, `search_path=''` | `authenticated` | nếu < 30 lượt trong 10 phút: dọn dẹp + ghi 1 lượt, trả true; ngược lại false (không dọn) |
 | `agent_create_approval(action, target, run_state, mac, ttl)` | DEFINER, `search_path=''` | `authenticated` | dọn dẹp, kiểm tra mục thuộc người gọi, giới hạn, tạo bản ghi `pending` |
 | `agent_claim_approval(id, action, target)` | DEFINER, `search_path=''` | `authenticated` | khóa hàng, kiểm tra, chuyển `approved`, cấp `claim_token` |
 | `agent_reject_approval(id, action, target)` | DEFINER, `search_path=''` | `authenticated` | chuyển `rejected`, xóa trắng `run_state` |

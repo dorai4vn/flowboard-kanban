@@ -1,7 +1,8 @@
 # Buổi 11 — Báo cáo Trợ lý AI (kiểm thử, bảo mật, nghiệm thu)
 
 Nhánh `claude/m11-ai-agent` · Draft PR https://github.com/dorai4vn/flowboard-kanban/pull/4 ·
-Preview https://flowboard-kanban-git-claude-m11-ai-agent-dorai4vn.vercel.app
+Preview https://flowboard-kanban-git-claude-m11-ai-agent-dorai4vn.vercel.app ·
+Review migration: `docs/m11-migration-review.md`
 
 Ký hiệu trạng thái: **[Local]** đã kiểm chứng cục bộ · **[Preview]** đã kiểm chứng trên Preview ·
 **[Chưa test]** · **[Bị chặn]** do thiếu credential/mạng.
@@ -48,23 +49,32 @@ trong `agent_execute_approval` (SECURITY INVOKER, RLS vẫn áp dụng) cùng tr
 | Run sau khi duyệt cố xóa mục thứ hai → chỉ tạo yêu cầu duyệt mới | [Local] | unit |
 | Bảng thay đổi (thêm/bớt việc) sau khi hiện thẻ → không xóa, 409 | [Local] | pgTAP, unit |
 
-## 4. Kết quả kiểm thử (chạy thật, commit `d15c809`)
+## 4. Kết quả kiểm thử (chạy thật trên máy cục bộ, commit cuối của nhánh)
 
 | Lớp | Lệnh | Kết quả |
 |---|---|---|
-| Lint + typecheck + unit/component + build | `npm run check` | **216/216 pass**, build OK [Local] |
-| DB RLS + RPC (pgTAP) | `npm run test:db` | **116/116 pass** [Local] |
-| Integration (Supabase Local, 2 user) | `npm run test:integration` | **15/15 pass** [Local] |
+| Lint + typecheck + unit/component + build | `npm run check` | **220/220 pass**, build OK [Local] |
+| DB RLS + RPC (pgTAP, 7 file) | `npm run test:db` | **126/126 pass** [Local] |
+| Integration (Supabase Local, 2 user, JWT + RLS thật) | `npm run test:integration` | **15/15 pass** [Local] |
 | E2E desktop + mobile + AI | `npm run test:e2e` | **25 pass**, 4 skip (ảnh QC chạy riêng) [Local] |
-| Model thật | `npm run test:agent-live` | **5/5 pass** [Local] |
+| Model thật `gpt-5.4-mini` | `npm run test:agent-live` | **5/5 pass** [Local] |
+| Tác động migration + rollback (Postgres dùng một lần) | `bash scripts/check-migration-impact.sh` | **PASS**: dữ liệu/schema M10 giữ nguyên ở 5 bước [Local] |
 | Quét secret | `npm run check:secrets` | OK; `dist/` không chứa `OPENAI_API_KEY` [Local] |
-| Lỗi nhà cung cấp / timeout / max turns / DB sập | unit `handlers.test.ts` | pass [Local] |
-| Preview | — | **[Bị chặn]**: thiếu migration trên Supabase Cloud + `OPENAI_API_KEY`/`AGENT_STATE_SECRET` trên Preview; container không truy cập được `*.vercel.app` |
+| Preview | — | Build **thành công** trên Vercel; chức năng AI **[Bị chặn]**: thiếu migration trên DB của Preview + `OPENAI_API_KEY`/`AGENT_STATE_SECRET`; container không truy cập được `*.vercel.app` |
 
 ## 5. Review bảo mật độc lập
 
 Reviewer độc lập (subagent riêng, chỉ đọc) trên `git diff 7630d87..HEAD`: **0 Critical, 2 Important, 9 Minor**.
 Vòng 2 (kiểm tra bản sửa `d15c809`): I-1, I-2 và các Minor đã xử lý; **không có Critical/Important mới**; 3 Minor mới (N-1..N-3).
+
+Vòng 3 — reviewer **mới, độc lập** rà toàn bộ diff `7630d87..46984aa`: **0 Critical, 2 Important** (R3-I1: lấp DB qua RPC
+trực tiếp vì bản ghi `approved`/hết hạn còn giữ run state và chỉ dọn khi chính user quay lại; R3-I2: chat hỏng sau một
+câu trả lời dài > 1 500 ký tự), 6 Minor. Đã sửa (commit `5bffd83`): hàm nội bộ `agent_housekeeping()` dọn cho mọi tài
+khoản, giới hạn 128 KB theo byte, server rút gọn lịch sử thay vì từ chối + client giới hạn byte, `target_missing` → 410,
+timeout → làm mới bảng, cấu hình không cho model kịch bản thay khóa khi deploy. Reviewer kiểm tra lại: **APPROVE**, không
+có Critical/Important mới; 2 Minor mới (housekeeping sát giờ hết hạn, housekeeping kích hoạt quá nhiều) — đã sửa luôn kèm
+pgTAP. Minor còn lại không sửa: lost update khi người dùng sửa cùng lúc (last-write-wins như UI), MAC không gắn approval id
+(tác động thấp), không có giới hạn theo IP trước bước xác thực (nên bật Vercel Firewall).
 
 | Mục | Vấn đề | Xử lý |
 |---|---|---|
@@ -80,7 +90,7 @@ Vòng 2 (kiểm tra bản sửa `d15c809`): I-1, I-2 và các Minor đã xử l�
 | M-9 | Thiếu test | Đã bổ sung (pgTAP `agent_hardening.test.sql`, unit “review hardening”, `config.test.ts`) |
 | N-1 (vòng 2) | Bản ghi `approved` không tính vào giới hạn 10 | Đã sửa: tính cả `approved`; pgTAP bổ sung |
 | N-2 (vòng 2) | RPC xóa không có timeout riêng (Postgres treo → Vercel 504) | Chưa sửa — vẫn không xóa sai; ghi nhận rủi ro |
-| N-3 (vòng 2) | Duyệt lại claim sau 2 phút dựa vào `maxDuration: 60` | Chưa sửa — vẫn chỉ xóa 1 lần (token cũ vô hiệu); ghi nhận rủi ro |
+| N-3 (vòng 2) | Duyệt lại claim sau 2 phút dựa vào `maxDuration: 60` | Đã sửa: ghim `maxDuration: 60` trong `vercel.json` |
 | M-1 | `agent_claim_approval` trả run state cho chính chủ | Giữ nguyên (không leo thang quyền: dữ liệu của chính user, MAC + kiểm tra tham số + claim); sửa comment |
 
 Điểm reviewer xác nhận đạt: khóa OpenAI chỉ ở server, mọi truy cập DB bằng JWT người dùng (RLS), SECURITY
@@ -100,8 +110,8 @@ trên desktop (nay đẩy layout sang trái), viền focus kép ở ô nhập.
 - Model có thể hiểu sai yêu cầu mơ hồ (ví dụ hai việc trùng tên) — đã hướng dẫn model hỏi lại, nhưng các
   thao tác tạo/sửa không cần duyệt; chỉ xóa mới cần.
 - Chi phí OpenAI: giới hạn 30 yêu cầu/10 phút/người, tối đa 8 lượt tool/yêu cầu; chưa có hạn mức theo ngày.
-- Dọn dẹp bản ghi cũ chỉ chạy khi chính người dùng đó dùng lại Trợ lý (chưa có purge toàn cục bằng `pg_cron`).
-- N-2/N-3 ở mục 5.
+- Dọn dẹp chạy khi có người dùng Trợ lý (không cần `pg_cron`); nếu không ai dùng, tối đa ~10 × 128 KB mỗi tài khoản nằm chờ.
+- N-2 ở mục 5; không có giới hạn theo IP trước bước xác thực (khuyến nghị Vercel Firewall).
 - Lịch sử chat chỉ lưu trong bộ nhớ trình duyệt (mất khi tải lại trang) — theo thiết kế.
 - Dữ liệu bị gửi tới OpenAI: tiêu đề/mô tả công việc mà tool trả về trong cuộc trò chuyện.
 
