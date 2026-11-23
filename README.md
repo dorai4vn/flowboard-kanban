@@ -73,7 +73,7 @@ src/domain/      Logic thuần (bảng, công việc, lọc, ngày, dữ liệu 
 src/data/        Mutation, mapper, BoardRepository (Supabase + bản giả cho test)
 src/store/       Zustand store: hàng đợi ghi, hoàn tác, cô lập phiên theo user
 src/auth/        AuthGate + Google login (Supabase Auth)
-supabase/        config.toml, migrations (schema + RLS + RPC), tests pgTAP
+supabase/        config.toml, migrations (schema + RLS + RPC), rollbacks, tests pgTAP
 server/agent/    Trợ lý AI: agent, tools, handlers, duyệt xóa (chỉ chạy phía server)
 api/agent/       Vercel Functions: /api/agent/chat, /api/agent/approval
 src/assistant/   Client gọi API trợ lý + state hội thoại
@@ -96,4 +96,4 @@ docs/            Spec, Plan, báo cáo kiểm thử, báo cáo review, ảnh ch�
 - Buổi 10 — Spec/Plan: [docs/superpowers/specs/2026-11-22-flowboard-m10-ui-focus-design.md](docs/superpowers/specs/2026-11-22-flowboard-m10-ui-focus-design.md), [docs/superpowers/plans/2026-11-22-flowboard-m10-ui-focus.md](docs/superpowers/plans/2026-11-22-flowboard-m10-ui-focus.md)
 - Buổi 10 — Báo cáo: [docs/m10-report.md](docs/m10-report.md)
 - Buổi 11 — Spec/Plan: [docs/superpowers/specs/2026-11-23-flowboard-m11-ai-agent-design.md](docs/superpowers/specs/2026-11-23-flowboard-m11-ai-agent-design.md), [docs/superpowers/plans/2026-11-23-flowboard-m11-ai-agent.md](docs/superpowers/plans/2026-11-23-flowboard-m11-ai-agent.md)
-- Buổi 11 — Cấu hình: [docs/m11-setup-guide.md](docs/m11-setup-guide.md) · Báo cáo: [docs/m11-report.md](docs/m11-report.md) · Bản ghi model thật: [docs/m11-live-transcript.md](docs/m11-live-transcript.md)
+- Buổi 11 — Cấu hình: [docs/m11-setup-guide.md](docs/m11-setup-guide.md) · Review migration: [docs/m11-migration-review.md](docs/m11-migration-review.md) · Báo cáo: [docs/m11-report.md](docs/m11-report.md) · Bản ghi model thật: [docs/m11-live-transcript.md](docs/m11-live-transcript.md)

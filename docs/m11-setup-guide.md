@@ -29,17 +29,17 @@ từ chối, không có thao tác nào chạy.
 
 **Ảnh hưởng (đã kiểm tra):**
 
-- Chỉ **thêm**: 2 bảng mới (`agent_requests`, `agent_approvals`), RLS + policy cho 2 bảng đó, 6 hàm
+- Chỉ **thêm**: 2 bảng mới (`agent_requests`, `agent_approvals`), RLS + policy cho 2 bảng đó, 7 hàm
   `agent_*`. Không sửa/xóa bảng, cột, policy hay hàm hiện có → bản Production đang chạy không bị ảnh hưởng.
 - Hàm SECURITY DEFINER kiểm tra `auth.uid()` tường minh, `search_path` cố định, thu hồi quyền `anon`/`public`.
 - Giới hạn chống lạm dụng nằm trong DB: 30 yêu cầu/10 phút/người, 30 yêu cầu xóa/giờ, tối đa 10 đang chờ,
-  run state ≤ 200 000 ký tự; bản ghi đã xử lý bị xóa sau 1 ngày → bảng không phình trên DB dùng chung.
-- Đã chạy trên Supabase Local: pgTAP 116/116, integration 15/15.
+  run state ≤ 128 KB; run state bị xóa trắng khi hết hạn và bản ghi > 1 ngày bị dọn cho mọi tài khoản → bảng không phình trên DB dùng chung.
+- Đã chạy trên Supabase Local: pgTAP 125/125, integration 15/15.
 
 **Cách áp dụng (khi bạn đồng ý):** Supabase Dashboard → SQL Editor → dán toàn bộ nội dung file migration → Run.
 Hoặc `npx supabase db push` với project đã link (sẽ chỉ đẩy migration chưa có).
 
-**Rollback:** chạy câu lệnh ghi ở đầu file migration (drop 6 hàm `agent_*` rồi drop 2 bảng). Không đụng dữ
+**Rollback:** chạy file `supabase/rollbacks/20261123000000_agent_approvals.down.sql` (drop 7 hàm `agent_*` rồi drop 2 bảng; chi tiết `docs/m11-migration-review.md` §8). Không đụng dữ
 liệu bảng/công việc của người dùng.
 
 ## 3. Kiểm tra trên Preview

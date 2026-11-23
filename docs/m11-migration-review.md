@@ -3,8 +3,8 @@
 Trạng thái: **CHƯA áp dụng lên Supabase Cloud** (chờ chủ dự án phê duyệt). Chỉ đã chạy trên Supabase Local và
 trên container Postgres dùng một lần. Commit được review: nhánh `claude/m11-ai-agent`.
 
-> Lưu ý số lượng hàm: bản đầu có 5 hàm; sau review bảo mật (I-1) có thêm `agent_rate_limit_hit()`, nên
-> migration hiện có **6 hàm**.
+> Lưu ý số lượng hàm: bản đầu có 5 hàm. Review bảo mật thêm `agent_rate_limit_hit()` (vòng 1) và hàm nội bộ
+> `agent_housekeeping()` (vòng 3), nên migration hiện có **7 hàm**.
 
 ## 1. Tóm tắt cho người phê duyệt
 
@@ -12,7 +12,7 @@ trên container Postgres dùng một lần. Commit được review: nhánh `clau
 |---|---|---|
 | Có sửa/xóa bảng, cột, policy, hàm, index hay dữ liệu hiện có? | **Không** — chỉ `create` đối tượng mới tên `agent_*` | Mục 7: dấu vân tay md5 trước/sau giống hệt |
 | Bảng mới | 2: `agent_requests`, `agent_approvals` | Mục 3 |
-| Hàm mới | 6 (5 SECURITY DEFINER, 1 SECURITY INVOKER) | Mục 4 |
+| Hàm mới | 7 (6 SECURITY DEFINER, 1 SECURITY INVOKER); 6 gọi được bởi `authenticated`, 1 nội bộ | Mục 4 |
 | `anon` có quyền gì không? | Không (bảng: revoke all; hàm: revoke from `public, anon`) | Mục 3–4, truy vấn quyền thực tế |
 | Khóa bảng hiện có khi áp dụng? | Không khóa `boards/labels/tasks/task_labels`. Chỉ tạo FK tới `auth.users` (khóa ngắn `SHARE ROW EXCLUSIVE` trên `auth.users` lúc tạo bảng) | SQL mục 2 |
 | Rollback | File riêng `supabase/rollbacks/20261123000000_agent_approvals.down.sql`, đã chạy thử: gỡ sạch, dữ liệu M10 giữ nguyên, áp lại được | Mục 8 |
@@ -24,7 +24,9 @@ trên container Postgres dùng một lần. Commit được review: nhánh `clau
 -- FlowBoard M11: AI assistant support. ADDITIVE ONLY — no existing table, policy or function is changed.
 --
 -- * agent_requests: per-user request log for rate limiting. Rows are only written by agent_rate_limit_hit(),
---   which caps the log at 30 rows per 10 minutes per user and purges rows older than a day.
+--   which caps the log at 30 rows per 10 minutes per user.
+-- * Housekeeping (agent_housekeeping, internal): every agent call clears expired run states and deletes rows
+--   older than a day FOR ALL ACCOUNTS (bounded batches), so abandoned accounts cannot keep data around.
 -- * agent_approvals: server-side human approvals for destructive agent actions (delete task / delete board).
 --   Clients may only SELECT their own rows (without the serialized run state; the server receives it from
 --   agent_claim_approval and the MAC binds it to user + action + target). Every state change goes
@@ -33,7 +35,7 @@ trên container Postgres dùng một lần. Commit được review: nhánh `clau
 --   the approval label. The actual DELETE runs in agent_execute_approval as SECURITY INVOKER, so RLS on
 --   boards/tasks still applies to the deletion itself.
 --
--- Rollback (if ever needed): drop function public.agent_rate_limit_hit(), public.agent_execute_approval(uuid, uuid, text, uuid),
+-- Rollback: supabase/rollbacks/20261123000000_agent_approvals.down.sql. Drops public.agent_rate_limit_hit(), public.agent_housekeeping(), public.agent_execute_approval(uuid, uuid, text, uuid),
 --   public.agent_consume_claim(uuid, uuid, text, uuid), public.agent_reject_approval(uuid, text, uuid),
 --   public.agent_claim_approval(uuid, text, uuid), public.agent_create_approval(text, uuid, text, text, integer);
 --   drop table public.agent_approvals, public.agent_requests;
@@ -53,6 +55,64 @@ grant select on table public.agent_requests to authenticated;
 create policy agent_requests_select_own on public.agent_requests for select to authenticated
   using (user_id = (select auth.uid()));
 
+
+-- ============================================================== approvals
+create table public.agent_approvals (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users (id) on delete cascade,
+  action text not null check (action in ('delete_task', 'delete_board')),
+  target_id uuid not null,
+  target_label text not null,
+  detail jsonb not null default '{}'::jsonb,
+  run_state text not null check (octet_length(run_state) <= 131072),
+  run_state_mac text not null,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'executed', 'rejected', 'expired')),
+  claim_token uuid,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  decided_at timestamptz
+);
+create index agent_approvals_user_status_idx on public.agent_approvals (user_id, status);
+create index agent_approvals_expires_idx on public.agent_approvals (expires_at);
+create index agent_requests_time_idx on public.agent_requests (created_at);
+
+alter table public.agent_approvals enable row level security;
+alter table public.agent_approvals force row level security;
+revoke all on table public.agent_approvals from anon, authenticated, public;
+-- column-level: clients never read the serialized run state, its MAC or the claim token
+grant select (id, user_id, action, target_id, target_label, detail, status, created_at, expires_at, decided_at)
+  on table public.agent_approvals to authenticated;
+create policy agent_approvals_select_own on public.agent_approvals for select to authenticated
+  using (user_id = (select auth.uid()));
+
+
+-- -------------------------------------------------------------- housekeeping (internal, all accounts, bounded)
+create function public.agent_housekeeping()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  -- expired requests keep no conversation, whatever their status; open ones are closed
+  update public.agent_approvals a
+     set run_state = '',
+         status = case when a.status in ('pending', 'approved') then 'expired' else a.status end,
+         decided_at = coalesce(a.decided_at, now())
+   where a.id in (select x.id from public.agent_approvals x
+                   where x.expires_at <= now() and (x.run_state <> '' or x.status in ('pending', 'approved'))
+                   limit 200 for update skip locked);
+  delete from public.agent_approvals a
+   where a.id in (select x.id from public.agent_approvals x
+                   where x.expires_at < now() - interval '1 day'
+                      or (x.status <> 'pending' and x.created_at < now() - interval '1 day')
+                   limit 500 for update skip locked);
+  delete from public.agent_requests r
+   where r.id in (select x.id from public.agent_requests x where x.created_at < now() - interval '1 day' limit 500 for update skip locked);
+end;
+$$;
+revoke all on function public.agent_housekeeping() from public, anon, authenticated;
+
 -- The only way to write the log: one capped, locked check per request (rate limit hard-coded server-side).
 create function public.agent_rate_limit_hit()
 returns boolean
@@ -66,8 +126,8 @@ begin
   if v_uid is null then
     raise exception 'not authenticated' using errcode = '42501';
   end if;
+  perform public.agent_housekeeping();
   perform pg_advisory_xact_lock(hashtextextended('agent_requests:' || v_uid::text, 0));
-  delete from public.agent_requests r where r.user_id = v_uid and r.created_at < now() - interval '1 day';
   if (select count(*) from public.agent_requests r where r.user_id = v_uid and r.created_at > now() - interval '10 minutes') >= 30 then
     return false;
   end if;
@@ -77,33 +137,6 @@ end;
 $$;
 revoke all on function public.agent_rate_limit_hit() from public, anon;
 grant execute on function public.agent_rate_limit_hit() to authenticated;
-
--- ============================================================== approvals
-create table public.agent_approvals (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users (id) on delete cascade,
-  action text not null check (action in ('delete_task', 'delete_board')),
-  target_id uuid not null,
-  target_label text not null,
-  detail jsonb not null default '{}'::jsonb,
-  run_state text not null check (char_length(run_state) <= 200000),
-  run_state_mac text not null,
-  status text not null default 'pending' check (status in ('pending', 'approved', 'executed', 'rejected', 'expired')),
-  claim_token uuid,
-  created_at timestamptz not null default now(),
-  expires_at timestamptz not null,
-  decided_at timestamptz
-);
-create index agent_approvals_user_status_idx on public.agent_approvals (user_id, status);
-
-alter table public.agent_approvals enable row level security;
-alter table public.agent_approvals force row level security;
-revoke all on table public.agent_approvals from anon, authenticated, public;
--- column-level: clients never read the serialized run state, its MAC or the claim token
-grant select (id, user_id, action, target_id, target_label, detail, status, created_at, expires_at, decided_at)
-  on table public.agent_approvals to authenticated;
-create policy agent_approvals_select_own on public.agent_approvals for select to authenticated
-  using (user_id = (select auth.uid()));
 
 -- -------------------------------------------------------------- create
 create function public.agent_create_approval(p_action text, p_target uuid, p_run_state text, p_run_state_mac text, p_ttl_seconds integer default 600)
@@ -127,15 +160,12 @@ begin
   if p_run_state is null or p_run_state_mac is null then
     raise exception 'missing run state' using errcode = '22023';
   end if;
-  if char_length(p_run_state) > 200000 or char_length(p_run_state_mac) > 200 then
+  if octet_length(p_run_state) > 131072 or octet_length(p_run_state_mac) > 200 then
     raise exception 'run state too large' using errcode = '54000';
   end if;
   -- serialise this user's creations so the budgets below cannot be raced
   perform pg_advisory_xact_lock(hashtextextended('agent_approvals:' || v_uid::text, 0));
-  -- retention: close expired requests (dropping their run state) and purge old decided ones
-  update public.agent_approvals a set status = 'expired', run_state = '', decided_at = now()
-   where a.user_id = v_uid and a.status = 'pending' and a.expires_at <= now();
-  delete from public.agent_approvals a where a.user_id = v_uid and a.status <> 'pending' and a.created_at < now() - interval '1 day';
+  perform public.agent_housekeeping();
 
   -- the target must belong to the caller (explicit check: this function bypasses RLS)
   if p_action = 'delete_task' then
@@ -255,19 +285,26 @@ begin
   if v_uid is null then
     raise exception 'not authenticated' using errcode = '42501';
   end if;
+  select * into v_row from public.agent_approvals a
+   where a.id = p_id and a.user_id = v_uid and a.status = 'approved' and a.claim_token = p_claim
+     and a.action = p_action and a.target_id = p_target
+     for update;
+  if not found then
+    return jsonb_build_object('code', 'invalid_claim');
+  end if;
+  -- the target may have been deleted elsewhere since the card was shown: close the approval cleanly
+  if (p_action = 'delete_task' and not exists (select 1 from public.tasks t where t.id = p_target and t.user_id = v_uid))
+     or (p_action = 'delete_board' and not exists (select 1 from public.boards b where b.id = p_target and b.user_id = v_uid)) then
+    update public.agent_approvals set status = 'expired', run_state = '', decided_at = now() where id = p_id;
+    return jsonb_build_object('code', 'target_missing');
+  end if;
   if p_action = 'delete_board' then
-    select * into v_row from public.agent_approvals a
-     where a.id = p_id and a.user_id = v_uid and a.status = 'approved' and a.claim_token = p_claim
-       and a.action = p_action and a.target_id = p_target
-       for update;
-    if found then
-      -- lock the board (blocks concurrent task inserts via the FK) and compare with the approved task set
-      perform 1 from public.boards b where b.id = p_target and b.user_id = v_uid for update;
-      if (select coalesce(jsonb_agg(t.id order by t.id), '[]'::jsonb) from public.tasks t where t.board_id = p_target and t.user_id = v_uid)
-         is distinct from coalesce(v_row.detail->'task_ids', '[]'::jsonb) then
-        update public.agent_approvals set status = 'expired', run_state = '', decided_at = now() where id = p_id;
-        return jsonb_build_object('code', 'target_changed');
-      end if;
+    -- lock the board (blocks concurrent task inserts via the FK) and compare with the approved task set
+    perform 1 from public.boards b where b.id = p_target and b.user_id = v_uid for update;
+    if (select coalesce(jsonb_agg(t.id order by t.id), '[]'::jsonb) from public.tasks t where t.board_id = p_target and t.user_id = v_uid)
+       is distinct from coalesce(v_row.detail->'task_ids', '[]'::jsonb) then
+      update public.agent_approvals set status = 'expired', run_state = '', decided_at = now() where id = p_id;
+      return jsonb_build_object('code', 'target_changed');
     end if;
   end if;
   update public.agent_approvals a
@@ -335,7 +372,8 @@ grant execute on function public.agent_execute_approval(uuid, uuid, text, uuid) 
 - RLS **enable + force**. Quyền: `revoke all` từ `anon, authenticated, public`; chỉ `grant select` cho `authenticated`.
 - Policy `agent_requests_select_own` (SELECT, `authenticated`): `user_id = (select auth.uid())`.
 - Không có policy INSERT/UPDATE/DELETE và không có quyền bảng tương ứng → người dùng **không thể** tự ghi,
-  sửa hay xóa nhật ký. Chỉ hàm `agent_rate_limit_hit()` ghi được (tối đa 30 dòng / 10 phút / người; tự xóa dòng > 1 ngày).
+  sửa hay xóa nhật ký. Chỉ hàm `agent_rate_limit_hit()` ghi được (tối đa 30 dòng / 10 phút / người). Dòng > 1 ngày
+  bị `agent_housekeeping()` xóa cho mọi tài khoản.
 
 ### `agent_approvals` — yêu cầu xóa chờ người dùng duyệt
 | Cột | Kiểu | Ràng buộc |
@@ -346,7 +384,7 @@ grant execute on function public.agent_execute_approval(uuid, uuid, text, uuid) 
 | `target_id` | uuid | mục cần xóa (bất biến sau khi tạo) |
 | `target_label` | text | tên lấy **từ DB**, không từ model |
 | `detail` | jsonb | bảng chứa việc; với xóa bảng: `task_count` + `task_ids` chính xác |
-| `run_state` | text | trạng thái hội thoại của SDK, `≤ 200 000` ký tự; bị xóa trắng khi đã xử lý |
+| `run_state` | text | trạng thái hội thoại của SDK, `≤ 128 KB` (tính theo byte); bị xóa trắng khi đã xử lý hoặc hết hạn |
 | `run_state_mac` | text | HMAC-SHA256 (xem mục 10) |
 | `status` | text | `pending → approved → executed`, hoặc `rejected` / `expired` |
 | `claim_token` | uuid | mã dùng một lần, cấp khi duyệt |
@@ -368,19 +406,20 @@ anon            | (không có quyền nào)
 RLS: agent_approvals force=t, agent_requests force=t
 ```
 
-## 4. Sáu hàm mới
+## 4. Bảy hàm mới
 
 | Hàm | Loại | EXECUTE | Việc làm |
 |---|---|---|---|
-| `agent_rate_limit_hit()` | DEFINER, `search_path=''` | `authenticated` | ghi 1 lượt nếu < 30 trong 10 phút, trả true/false |
-| `agent_create_approval(action, target, run_state, mac, ttl)` | DEFINER, `search_path=''` | `authenticated` | kiểm tra mục thuộc người gọi, giới hạn, tạo bản ghi `pending` |
+| `agent_housekeeping()` | DEFINER, `search_path=''` | **không ai** (nội bộ; revoke cả `authenticated`) | cho mọi tài khoản, theo lô giới hạn (`limit` + `for update skip locked`): xóa trắng `run_state` của bản ghi hết hạn và đóng bản ghi còn mở; xóa bản ghi/nhật ký > 1 ngày |
+| `agent_rate_limit_hit()` | DEFINER, `search_path=''` | `authenticated` | dọn dẹp, rồi ghi 1 lượt nếu < 30 trong 10 phút, trả true/false |
+| `agent_create_approval(action, target, run_state, mac, ttl)` | DEFINER, `search_path=''` | `authenticated` | dọn dẹp, kiểm tra mục thuộc người gọi, giới hạn, tạo bản ghi `pending` |
 | `agent_claim_approval(id, action, target)` | DEFINER, `search_path=''` | `authenticated` | khóa hàng, kiểm tra, chuyển `approved`, cấp `claim_token` |
 | `agent_reject_approval(id, action, target)` | DEFINER, `search_path=''` | `authenticated` | chuyển `rejected`, xóa trắng `run_state` |
-| `agent_consume_claim(id, claim, action, target)` | DEFINER, `search_path=''` | `authenticated` | tiêu claim → `executed` (xóa bảng: so tập công việc) |
+| `agent_consume_claim(id, claim, action, target)` | DEFINER, `search_path=''` | `authenticated` | tiêu claim → `executed`; mục đã mất → `target_missing`; xóa bảng: so tập công việc → `target_changed` |
 | `agent_execute_approval(id, claim, action, target)` | **INVOKER**, `search_path=''` | `authenticated` | gọi consume + `DELETE` trong **một transaction**, DELETE chịu RLS |
 
-- Tất cả: `revoke all ... from public, anon`, `grant execute ... to authenticated` (catalog: `authenticated=X`,
-  `service_role=X`, `postgres=X`; không có `anon`).
+- 6 hàm: `revoke all ... from public, anon`, `grant execute ... to authenticated` (catalog: `authenticated=X`,
+  `service_role=X`, `postgres=X`; không có `anon`). `agent_housekeeping()`: revoke từ `public, anon, authenticated`.
 - DEFINER chạy với quyền chủ sở hữu (`postgres`, có `BYPASSRLS` trên Supabase — đã kiểm tra `rolbypassrls = t`,
   `rolsuper = f`). Vì vậy **mỗi hàm DEFINER tự lọc** `user_id = auth.uid()` ở mọi câu lệnh (mục 5).
 - `search_path = ''` + tên đầy đủ `public.` / `auth.` → không thể chèn hàm/bảng giả qua search_path.
@@ -412,7 +451,8 @@ RLS: agent_approvals force=t, agent_requests force=t
 | **Bảng thay đổi sau khi hiện thẻ** | lưu `task_ids`; khi thực thi khóa `boards ... for update` (chặn insert task qua FK) rồi so sánh → `target_changed`, không xóa | pgTAP, unit |
 | **Model tự gọi tool xóa** | tool `needsApproval` (SDK dừng) + tool từ chối nếu không có claim khớp từ server | unit |
 | **Request chết giữa chừng** | claim `approved` > 2 phút được duyệt lại với token mới; token cũ vô hiệu | pgTAP |
-| **Lạm dụng dung lượng** | ≤ 30 lượt/10 phút, ≤ 30 yêu cầu duyệt/giờ, ≤ 10 đang mở, run state ≤ 200 000, dọn sau 1 ngày, advisory lock | pgTAP |
+| **Mục đã bị xóa ở nơi khác** | consume kiểm tra mục còn tồn tại → `target_missing` (410), đóng bản ghi | pgTAP, unit |
+| **Lạm dụng dung lượng** | ≤ 30 lượt/10 phút, ≤ 30 yêu cầu duyệt/giờ, ≤ 10 đang mở (`pending`+`approved`), run state ≤ 128 KB theo byte, run state xóa trắng ngay khi hết hạn, dọn bản ghi > 1 ngày cho **mọi** tài khoản, advisory lock | pgTAP (`agent_hardening`, `agent_retention`) |
 
 ## 7. Tác động đến bảng và dữ liệu M10 hiện có — đã đo
 
@@ -422,9 +462,9 @@ rồi lấy dấu vân tay md5 ở 5 thời điểm. Kết quả thật:
 
 ```
 check                    before        migrated      used          rolled-back   reapplied
-data.boards              132d68cc5e81  132d68cc5e81  132d68cc5e81  132d68cc5e81  132d68cc5e81
-data.labels              04fb09594362  04fb09594362  04fb09594362  04fb09594362  04fb09594362
-data.tasks               053c1edbfee8  053c1edbfee8  053c1edbfee8  053c1edbfee8  053c1edbfee8
+data.boards              54cfa9da2829  54cfa9da2829  54cfa9da2829  54cfa9da2829  54cfa9da2829
+data.labels              9c6110c002d9  9c6110c002d9  9c6110c002d9  9c6110c002d9  9c6110c002d9
+data.tasks               ab994b79a200  ab994b79a200  ab994b79a200  ab994b79a200  ab994b79a200
 data.task_labels         cc3adb4ed989  cc3adb4ed989  cc3adb4ed989  cc3adb4ed989  cc3adb4ed989
 rows                     2/4/1/1       2/4/1/1       2/4/1/1       2/4/1/1       2/4/1/1
 schema.columns           1a6250ca5757  1a6250ca5757  1a6250ca5757  1a6250ca5757  1a6250ca5757
@@ -433,7 +473,7 @@ schema.grants            da4e3b494de9  da4e3b494de9  da4e3b494de9  da4e3b494de9 
 schema.functions         ec05130bf872  ec05130bf872  ec05130bf872  ec05130bf872  ec05130bf872
 schema.constraints       ade6acc558cb  ade6acc558cb  ade6acc558cb  ade6acc558cb  ade6acc558cb
 schema.triggers_indexes  8dd4e526a070  8dd4e526a070  8dd4e526a070  8dd4e526a070  8dd4e526a070
-m11.objects              0 tables, 0   2 tables, 6   2 tables, 6   0 tables, 0   2 tables, 6
+m11.objects              0 tables, 0   2 tables, 7   2 tables, 7   0 tables, 0   2 tables, 7
 PASS: M10 data and schema unchanged at every step; rollback removes all M11 objects
 ```
 
@@ -465,6 +505,7 @@ drop function if exists public.agent_reject_approval(uuid, text, uuid);
 drop function if exists public.agent_claim_approval(uuid, text, uuid);
 drop function if exists public.agent_create_approval(text, uuid, text, text, integer);
 drop function if exists public.agent_rate_limit_hit();
+drop function if exists public.agent_housekeeping();
 drop table if exists public.agent_approvals;
 drop table if exists public.agent_requests;
 -- the CLI records applied migrations here; remove the entry so the migration can be re-applied later
