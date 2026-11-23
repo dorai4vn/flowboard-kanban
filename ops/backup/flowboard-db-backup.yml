@@ -45,12 +45,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     env:
-      WORK: ${{ runner.temp }}/fb
-      TARGET_DIR: ${{ runner.temp }}/restore-target
       # throwaway Supabase stack started on this runner (local ports, default local passwords; not secrets)
       TARGET_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
       TARGET_ADMIN_URL: postgresql://supabase_admin:postgres@127.0.0.1:54322/postgres
     steps:
+      # The `runner` context is not available in job-level env, so the work paths are derived from $RUNNER_TEMP
+      # here and exported to the following steps.
+      - name: Set work paths
+        run: |
+          set -euo pipefail
+          echo "WORK=$RUNNER_TEMP/fb" >> "$GITHUB_ENV"
+          echo "TARGET_DIR=$RUNNER_TEMP/restore-target" >> "$GITHUB_ENV"
+
       - name: Safety checks (private repo, confirmation, FlowBoard project only, public key)
         env:
           IS_PRIVATE: ${{ github.event.repository.private }}
@@ -256,5 +262,5 @@ jobs:
       - name: Remove plaintext and stop the throwaway stack
         if: always()
         run: |
-          rm -rf "$WORK"
-          if [ -d "$TARGET_DIR" ]; then (cd "$TARGET_DIR" && supabase stop --no-backup > /dev/null 2>&1 || true); rm -rf "$TARGET_DIR"; fi
+          if [ -n "${WORK:-}" ]; then rm -rf "$WORK"; fi
+          if [ -n "${TARGET_DIR:-}" ] && [ -d "$TARGET_DIR" ]; then (cd "$TARGET_DIR" && supabase stop --no-backup > /dev/null 2>&1 || true); rm -rf "$TARGET_DIR"; fi
