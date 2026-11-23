@@ -14,6 +14,11 @@ drop function if exists public.agent_rate_limit_hit();
 drop function if exists public.agent_housekeeping();
 drop table if exists public.agent_approvals;
 drop table if exists public.agent_requests;
--- the CLI records applied migrations here; remove the entry so the migration can be re-applied later
-delete from supabase_migrations.schema_migrations where version = '20261123000000';
+-- the CLI records applied migrations here (if the table exists); remove the entry so it can be re-applied later
+do $$
+begin
+  if to_regclass('supabase_migrations.schema_migrations') is not null then
+    execute 'delete from supabase_migrations.schema_migrations where version = ''20261123000000''';
+  end if;
+end $$;
 commit;
