@@ -82,7 +82,7 @@ jobs:
           PY
           umask 077; mkdir -p "$WORK"
           printf '%s\n' "$PUBLIC_KEY" > "$WORK/public.pem"
-          bits=$(openssl pkey -pubin -in "$WORK/public.pem" -noout -text 2>/dev/null | sed -n 's/.*Public-Key: (\([0-9]*\) bit).*/\1/p')
+          bits=$(openssl pkey -pubin -in "$WORK/public.pem" -noout -text 2>/dev/null | sed -n 's/.*Public-Key: (\([0-9]*\) bit).*/\1/p' || true)
           [ -n "$bits" ] && [ "$bits" -ge 3072 ] || fail "Variable BACKUP_PUBLIC_KEY_PEM must be an RSA public key of at least 3072 bits."
           echo "Checks passed (public key: RSA $bits bit)."
 
@@ -198,6 +198,12 @@ jobs:
         run: |
           set -euo pipefail
           cd "$WORK/backup"
+          # Guard: the restore target must be the local throwaway stack and must not contain FlowBoard yet.
+          for u in "$TARGET_URL" "$TARGET_ADMIN_URL"; do
+            case "$u" in *@127.0.0.1:*|*@localhost:*) ;; *) echo "::error::Restore target is not local. Refusing."; exit 1 ;; esac
+          done
+          existing=$(psql "$TARGET_URL" -X -At -c "select count(*) from pg_tables where schemaname = 'public' and tablename in ('boards', 'labels', 'tasks', 'task_labels')")
+          [ "$existing" = "0" ] || { echo "::error::Restore target already contains FlowBoard tables. Refusing to touch it."; exit 1; }
           # Throwaway target only: the platform-managed parts (auth schema structure and cluster role settings)
           # are applied as the local superuser, exactly as Supabase has them. FlowBoard's own schema and all data
           # are then restored as `postgres` with the official command, in one transaction.
