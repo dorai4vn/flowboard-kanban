@@ -18,7 +18,7 @@ export default defineConfig({
     { name: 'desktop', use: { ...devices['Desktop Chrome'] }, testIgnore: /(mobile|ai|ai-mobile)\.spec\.ts/ },
     { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /(^|\/)mobile\.spec\.ts$/ },
     // AI assistant: dev server that also serves the api/agent/* handlers with the deterministic test model.
-    { name: 'ai', use: { ...devices['Desktop Chrome'], baseURL: AI_URL }, testMatch: /(^|\/)(ai|visual-qc-ai)\.spec\.ts$/ },
+    { name: 'ai', use: { ...devices['Desktop Chrome'], baseURL: AI_URL }, testMatch: /(^|\/)(ai|ai-entry|visual-qc-ai)\.spec\.ts$/ },
     { name: 'ai-mobile', use: { ...devices['Pixel 7'], baseURL: AI_URL }, testMatch: /ai-mobile\.spec\.ts/ },
   ],
   // E2E always runs against Supabase Local (`npm run db:start`); the public URL/key are read from `supabase status`.

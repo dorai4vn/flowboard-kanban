@@ -20,6 +20,15 @@ Sau khi lưu biến: Deployments → bản Preview mới nhất của nhánh `cl
 
 Không thay đổi biến của Production. Production vẫn chạy `main` và không có code Trợ lý AI.
 
+## 1b. Supabase Auth — cho phép đăng nhập quay về URL Preview (bắt buộc)
+
+Đăng nhập Google dùng `redirectTo = window.location.origin`. Nếu URL Preview **không** có trong danh sách Redirect URLs,
+Supabase âm thầm chuyển người dùng về **Site URL (Production M10)** sau khi đăng nhập → thấy giao diện M10, không có Trợ lý AI.
+
+Supabase → project FlowBoard → **Authentication → URL Configuration → Redirect URLs → Add URL**:
+`https://flowboard-kanban-git-claude-m11-ai-agent-dorai4vn.vercel.app/**` → Save.
+Chỉ thêm vào danh sách cho phép; không đổi Site URL, không ảnh hưởng người dùng Production. Google Console không cần đổi.
+
 ## 2. Migration Supabase (cần chủ dự án duyệt trước khi áp dụng)
 
 Preview dùng chung project Supabase Cloud với Production, nên migration
